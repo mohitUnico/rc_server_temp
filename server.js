@@ -49,7 +49,7 @@ function connectToITick() {
 
     iTickSocket.on('message', (data) => {
         const message = JSON.parse(data);
-        console.log("message", message);
+        // console.log("message", message);
 
         // Filter out non-data messages (like pong, auth confirmations, etc.)
         const isPong = message.resAc === 'pong';
