@@ -13,7 +13,7 @@ function startFlutterWebSocket() {
             try {
                 const data = JSON.parse(msg)
                 console.log(`subscribe request from flutter client: ${msg.toString()}`)
-                if (data.ac === 'subscribe' && data.symbol) {
+                if (data.type === 'subscribe' && data.symbol) {
 
                     const symbols = data.symbol.split(',');
 
@@ -29,7 +29,7 @@ function startFlutterWebSocket() {
                         subscribeSymbol(symbols[0]);
                     }
                 }
-                if (data.ac === 'unsubscribe' && data.symbol) {
+                if (data.type === 'unsubscribe' && data.symbol) {
                     const symbols = data.symbol.split(',');
                     for (const symbol of symbols) {
                         const isLastClient = removeClientFromSymbol(symbol, client);
