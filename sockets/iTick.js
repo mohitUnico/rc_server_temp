@@ -57,7 +57,7 @@ function subscribeSymbol(symbol) {
     if (iTickSocket && iTickSocket.readyState === WebSocket.OPEN) {
         iTickSocket.send(JSON.stringify({
             ac: 'subscribe',
-            params: `${symbol}$gb`,
+            params: `${symbol}$ba`,
             types: 'quote'
         }))
     }
@@ -68,7 +68,7 @@ function subscribeToAllSymbols() {
     console.log(`📥 Retrieved all symbols: ${JSON.stringify(symbols)}`);
 
     if (symbols.length > 0) {
-        const formattedSymbols = symbols.map(symbol => `${symbol}$gb`).join(',');
+        const formattedSymbols = symbols.map(symbol => `${symbol}$ba`).join(',');
         const message = {
             ac: 'subscribe',
             params: formattedSymbols,
