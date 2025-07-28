@@ -1,11 +1,11 @@
 import WebSocket from "ws";
 import { startPing, stopPing } from "../utils/ping.js";
-import { ITICK_WS_URL, ITICK_WS_AUTH_TOKEN } from "../config/envConfig.js";
+import { ITICK_CRYPTO_WS_URL, ITICK_WS_AUTH_TOKEN } from "../config/envConfig.js";
 import { getAllSymbols, getClientsForSymbol } from "../utils/subscriptionManager.js";
 let iTickSocket = null;
 let isItickReady = false;
 function connectToITick() {
-    iTickSocket = new WebSocket(ITICK_WS_URL, {
+    iTickSocket = new WebSocket(ITICK_CRYPTO_WS_URL, {
         headers: {
             token: ITICK_WS_AUTH_TOKEN
         }
