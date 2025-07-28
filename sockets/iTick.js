@@ -1,11 +1,11 @@
 import WebSocket from "ws";
 import { startPing, stopPing } from "../utils/ping.js";
-import { ITICK_CRYPTO_WS_URL, ITICK_WS_AUTH_TOKEN } from "../config/envConfig.js";
+import { ITICK_CRYPTO_WS_URL, ITICK_FOREX_WS_URL, ITICK_INDICES_WS_URL, ITICK_WS_AUTH_TOKEN } from "../config/envConfig.js";
 import { getAllSymbols, getClientsForSymbol } from "../utils/subscriptionManager.js";
 let iTickSocket = null;
 let isItickReady = false;
 function connectToITick() {
-    iTickSocket = new WebSocket(ITICK_CRYPTO_WS_URL, {
+    iTickSocket = new WebSocket(ITICK_FOREX_WS_URL, {
         headers: {
             token: ITICK_WS_AUTH_TOKEN
         }
@@ -57,7 +57,7 @@ function subscribeSymbol(symbol) {
     if (iTickSocket && iTickSocket.readyState === WebSocket.OPEN) {
         iTickSocket.send(JSON.stringify({
             ac: 'subscribe',
-            params: `${symbol}$ba`,
+            params: `${symbol}$gb`,
             types: 'quote'
         }))
     }
@@ -68,7 +68,7 @@ function subscribeToAllSymbols() {
     console.log(`📥 Retrieved all symbols: ${JSON.stringify(symbols)}`);
 
     if (symbols.length > 0) {
-        const formattedSymbols = symbols.map(symbol => `${symbol}$ba`).join(',');
+        const formattedSymbols = symbols.map(symbol => `${symbol}$gb`).join(',');
         const message = {
             ac: 'subscribe',
             params: formattedSymbols,
