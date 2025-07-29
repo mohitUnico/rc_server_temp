@@ -47,7 +47,7 @@ function subscribeSymbol(symbol) {
     if (cryptoSocket && cryptoSocket.readyState === WebSocket.OPEN) {
         cryptoSocket.send(JSON.stringify({
             ac: 'subscribe',
-            params: `${symbol}$gb`,
+            params: `${symbol}$ba`,
             types: 'quote'
         }));
     }
@@ -56,7 +56,7 @@ function subscribeSymbol(symbol) {
 function subscribeToAllSymbols() {
     const symbols = getAllSymbols('crypto');
     if (symbols.length > 0) {
-        const formattedSymbols = symbols.map(symbol => `${symbol}$gb`).join(',');
+        const formattedSymbols = symbols.map(symbol => `${symbol}$ba`).join(',');
         const message = {
             ac: 'subscribe',
             params: formattedSymbols,

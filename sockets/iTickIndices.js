@@ -22,7 +22,7 @@ function connectToIndices() {
         try {
             const raw = typeof data === 'string' ? data : data.toString();
             const message = JSON.parse(raw);
-            console.log("📩 Received from iTick:", message);
+            //console.log("📩 Received from iTick:", message);
             if (message.resAc === 'ping' || message.resAc === 'pong') return;
             const symbol = message.data?.s;
             if (symbol) {

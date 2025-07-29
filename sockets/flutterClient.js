@@ -45,36 +45,36 @@ function startFlutterWebSocket(server) {
             try {
                 const data = JSON.parse(msg);
                 console.log(`Request from flutter client: ${msg.toString()}`);
-                const { type, ac, symbol } = data;
-                if (!type || !ac || !symbol) {
-                    console.warn('⚠️ Invalid request: missing type, ac, or symbol');
+                const { data: assetType = 'forex', type: action, symbol } = data;
+                if (!action || !symbol) {
+                    console.warn('⚠️ Invalid request: missing type or symbol');
                     return;
                 }
-                if (!['forex', 'crypto', 'indices'].includes(type)) {
-                    console.warn('⚠️ Invalid asset type:', type);
+                if (!['forex', 'crypto', 'indices'].includes(assetType)) {
+                    console.warn('⚠️ Invalid asset type:', assetType);
                     return;
                 }
                 const symbols = symbol.split(',');
-                if (ac === 'subscribe') {
+                if (action === 'subscribe') {
                     for (const sym of symbols) {
-                        addClientToSymbol(type, sym, client);
+                        addClientToSymbol(assetType, sym, client);
                     }
                     if (symbols.length > 1) {
-                        console.log(`📡 Multiple symbols (${symbols.length}) - subscribing via subscribeToAllSymbols for ${type}`);
-                        subscribeAllFns[type]();
+                        console.log(`📡 Multiple symbols (${symbols.length}) - subscribing via subscribeToAllSymbols for ${assetType}`);
+                        subscribeAllFns[assetType]();
                     } else if (symbols.length === 1) {
-                        console.log(`📡 Single symbol - subscribing to ${symbols[0]} for ${type}`);
-                        subscribeFns[type](symbols[0]);
+                        console.log(`📡 Single symbol - subscribing to ${symbols[0]} for ${assetType}`);
+                        subscribeFns[assetType](symbols[0]);
                     }
-                } else if (ac === 'unsubscribe') {
+                } else if (action === 'unsubscribe') {
                     for (const sym of symbols) {
-                        const isLastClient = removeClientFromSymbol(type, sym, client);
+                        const isLastClient = removeClientFromSymbol(assetType, sym, client);
                         if (isLastClient) {
-                            console.log(`❌ No clients for ${sym} (${type}), removed from map`);
+                            console.log(`❌ No clients for ${sym} (${assetType}), removed from map`);
                         }
                     }
                 } else {
-                    console.warn('⚠️ Unknown action:', ac);
+                    console.warn('⚠️ Unknown action:', action);
                 }
             } catch (error) {
                 console.error('❗ Invalid message from client', error);
