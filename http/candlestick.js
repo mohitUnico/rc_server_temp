@@ -5,6 +5,11 @@ import { ITICK_WS_AUTH_TOKEN } from '../config/envConfig.js';
 const router = express.Router();
 
 router.get('/candlestick', async (req, res) => {
+    // Set CORS headers for this specific route
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
     const { type, code, kType, et, limit } = req.query;
     let baseUrl;
     switch (type) {

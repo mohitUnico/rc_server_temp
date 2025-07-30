@@ -19,6 +19,26 @@ const subscribeAllFns = {
 };
 
 const app = express();
+
+// CORS middleware to allow cross-origin requests
+app.use((req, res, next) => {
+    // Allow requests from any origin (you can restrict this to specific domains)
+    res.header('Access-Control-Allow-Origin', '*');
+
+    // Allow specific HTTP methods
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+
+    // Allow specific headers
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+        res.sendStatus(200);
+    } else {
+        next();
+    }
+});
+
 app.use(express.json());
 
 // Attach your HTTP routers
