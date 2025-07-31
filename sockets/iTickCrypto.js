@@ -1,75 +1,45 @@
-import WebSocket from "ws";
-import { startPing, stopPing } from "../utils/ping.js";
-import { ITICK_CRYPTO_WS_URL, ITICK_WS_AUTH_TOKEN } from "../config/envConfig.js";
+import { WebSocketManager } from '../websocket/WebSocketManager.js';
+import { WebSocketConfig } from '../config/websocket.js';
 import { getAllSymbols, getClientsForSymbol } from "../utils/subscriptionManager.js";
 
-let cryptoSocket = null;
-let isCryptoReady = false;
+let cryptoManager = null;
 
 function connectToCrypto() {
-    cryptoSocket = new WebSocket(ITICK_CRYPTO_WS_URL, {
-        headers: { token: ITICK_WS_AUTH_TOKEN }
-    });
+    if (!cryptoManager) {
+        cryptoManager = new WebSocketManager('crypto', WebSocketConfig.crypto);
 
-    cryptoSocket.on('open', () => {
-        console.log('✅ Connected to Crypto WebSocket');
-        isCryptoReady = true;
-        startPing(cryptoSocket);
-        subscribeToAllSymbols();
-    });
-
-    cryptoSocket.on('message', (data) => {
-        try {
-            const raw = typeof data === 'string' ? data : data.toString();
-            const message = JSON.parse(raw);
-            if (message.resAc === 'ping' || message.resAc === 'pong') return;
+        // Set up message handler
+        cryptoManager.onMessage((message, assetType) => {
             const symbol = message.data?.s;
-            if (symbol) {
-                const clients = getClientsForSymbol('crypto', symbol);
-                for (const client of clients) {
-                    if (client.readyState === WebSocket.OPEN) {
+            if (!symbol) return;
+
+            const clients = getClientsForSymbol(assetType, symbol);
+            for (const client of clients) {
+                if (client.readyState === 1) { // WebSocket.OPEN
+                    try {
                         client.send(JSON.stringify(message));
+                    } catch (error) {
+                        console.error('Error sending message to client:', error);
                     }
                 }
             }
-        } catch (err) {
-            console.error("❗ Error parsing or forwarding crypto message:", err.message);
-        }
-    });
+        });
+    }
 
-    cryptoSocket.on('close', () => {
-        console.log('❌ Crypto WebSocket closed. Reconnecting...');
-        setTimeout(connectToCrypto, 5000);
-    });
+    return cryptoManager.connect();
 }
 
 function subscribeSymbol(symbol) {
-    if (cryptoSocket && cryptoSocket.readyState === WebSocket.OPEN) {
-        cryptoSocket.send(JSON.stringify({
-            ac: 'subscribe',
-            params: `${symbol}$ba`,
-            types: 'quote'
-        }));
+    if (cryptoManager && cryptoManager.isConnected()) {
+        cryptoManager.subscribe(symbol);
     }
 }
 
 function subscribeToAllSymbols() {
     const symbols = getAllSymbols('crypto');
-    if (symbols.length > 0) {
-        const formattedSymbols = symbols.map(symbol => `${symbol}$ba`).join(',');
-        const message = {
-            ac: 'subscribe',
-            params: formattedSymbols,
-            types: 'quote'
-        };
-        if (cryptoSocket && cryptoSocket.readyState === WebSocket.OPEN) {
-            cryptoSocket.send(JSON.stringify(message));
-        }
-    }
+    symbols.forEach(symbol => {
+        subscribeSymbol(symbol);
+    });
 }
 
-export {
-    connectToCrypto,
-    subscribeSymbol,
-    subscribeToAllSymbols
-}; 
+export { connectToCrypto, subscribeSymbol, subscribeToAllSymbols }; 
