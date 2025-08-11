@@ -1,453 +1,426 @@
-# 🚀 Real-Time Market Data Server
+# RC Server - Real-Time Financial Data Gateway
 
-A Node.js WebSocket server that provides real-time market data for forex, crypto, and indices. The server acts as a gateway between Flutter clients and the iTick API, offering both WebSocket streaming and HTTP REST endpoints.
+A high-performance Node.js server that provides real-time financial data streaming from iTick API to Flutter clients via WebSocket, with additional HTTP REST endpoints for historical data.
 
-## 📋 Table of Contents
+## 🚀 Features
 
-- [Features](#-features)
-- [Architecture Overview](#-architecture-overview)
-- [Project Structure](#-project-structure)
-- [Installation](#-installation)
-- [Configuration](#-configuration)
-- [Usage](#-usage)
-- [API Reference](#-api-reference)
-- [WebSocket Protocol](#-websocket-protocol)
-- [Development](#-development)
-- [Troubleshooting](#-troubleshooting)
+### Core Capabilities
+- **Real-time Data Streaming**: Live forex, crypto, and indices data via WebSocket
+- **Multi-Asset Support**: Forex, Cryptocurrency, and Market Indices
+- **Client Isolation**: Independent subscription management per client
+- **Automatic Reconnection**: Robust WebSocket connection handling with ping/pong
+- **HTTP REST API**: Historical candlestick and quote data endpoints
+- **CORS Support**: Cross-origin request handling for web applications
 
-## ✨ Features
-
-- **Multi-Asset Support**: Real-time data for forex, crypto, and indices
-- **Dual Protocol**: WebSocket streaming + HTTP REST endpoints
-- **Modular Architecture**: Clean, maintainable code structure
-- **CORS Support**: Cross-origin requests for web clients
-- **Auto-Reconnection**: Robust WebSocket connection management
-- **Health Monitoring**: Built-in health checks and logging
-- **Scalable**: Easy to add new asset types and features
+### Technical Features
+- **ES6 Modules**: Modern JavaScript with import/export syntax
+- **WebSocket Management**: Efficient connection pooling and message routing
+- **Subscription Management**: Smart client-symbol mapping with cleanup
+- **Logging System**: Structured logging with context and timestamps
+- **Error Handling**: Comprehensive error handling and recovery
+- **Environment Configuration**: Secure environment variable management
 
 ## 🏗️ Architecture Overview
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Flutter       │    │   Web Client    │    │   Mobile App    │
-│   Client        │    │   (Browser)     │    │   (iOS/Android) │
-└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │
-                    ┌─────────────▼─────────────┐
-                    │    Market Data Server     │
-                    │    (Node.js + Express)    │
-                    └─────────────┬─────────────┘
-                                  │
-                    ┌─────────────▼─────────────┐
-                    │      iTick API            │
-                    │   (WebSocket + REST)      │
-                    └───────────────────────────┘
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Flutter       │    │   RC Server      │    │   iTick API     │
+│   Clients       │◄──►│   (Node.js)      │◄──►│   (WebSocket)   │
+│                 │    │                  │    │                 │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+        │                       │                       │
+        │                       │                       │
+        ▼                       ▼                       ▼
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   WebSocket     │    │   HTTP REST      │    │   Real-time     │
+│   Streaming     │    │   Endpoints      │    │   Data Feed     │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
-
-### **Core Components:**
-
-1. **WebSocket Gateway**: Handles real-time data streaming
-2. **HTTP Gateway**: Provides REST API endpoints
-3. **Subscription Manager**: Manages client subscriptions
-4. **WebSocket Manager**: Modular WebSocket connection handling
-5. **Configuration System**: Centralized settings management
 
 ## 📁 Project Structure
 
 ```
 rc_server_temp1/
-├── server.js                    # 🚀 Main application entry point
-├── package.json                 # 📦 Dependencies and scripts
-├── .env                        # 🔐 Environment variables
-├── config/
-│   ├── envConfig.js            # 🔧 Environment configuration
-│   └── websocket.js            # 🌐 WebSocket configuration
-├── websocket/
-│   └── WebSocketManager.js     # 🔌 Generic WebSocket manager
-├── sockets/
-│   ├── flutterClient.js        # 📱 Flutter client handler
-│   ├── iTickForex.js          # 💱 Forex WebSocket connection
-│   ├── iTickCrypto.js         # 🪙 Crypto WebSocket connection
-│   ├── iTickIndices.js        # 📊 Indices WebSocket connection
-│   └── iTick.js               # 📡 Legacy single WebSocket
-├── http/
-│   ├── candlestick.js         # 📈 Candlestick data endpoint
-│   └── quote.js               # 💹 Real-time quote endpoint
-├── utils/
-│   ├── subscriptionManager.js  # 📋 Client subscription management
-│   ├── ping.js                # 🏓 WebSocket ping utility
-│   └── logger.js              # 📝 Logging utility
-└── services/                   # 🔧 Additional services
+├── config/                 # Configuration files
+│   ├── envConfig.js       # Environment variables
+│   └── websocket.js       # WebSocket configuration
+├── core/                   # Core business logic
+├── http/                   # HTTP REST endpoints
+│   ├── candlestick.js     # Historical candlestick data
+│   └── quote.js           # Real-time quote data
+├── services/               # Business services
+├── sockets/                # WebSocket implementations
+│   ├── flutterClient.js   # Flutter client WebSocket server
+│   ├── iTickForex.js      # Forex data connection
+│   ├── iTickCrypto.js     # Crypto data connection
+│   └── iTickIndices.js    # Indices data connection
+├── utils/                  # Utility functions
+│   ├── logger.js          # Structured logging
+│   ├── ping.js            # WebSocket ping/pong
+│   └── subscriptionManager.js # Client subscription management
+├── websocket/              # WebSocket management
+│   └── WebSocketManager.js # Base WebSocket class
+├── server.js               # Main server entry point
+├── package.json            # Dependencies and scripts
+└── README.md               # This file
 ```
 
-## 🛠️ Installation
+## 🔧 Installation & Setup
 
-### **Prerequisites**
-- Node.js (v16 or higher)
+### Prerequisites
+- Node.js 18+ 
 - npm or yarn
 - iTick API credentials
 
-### **Setup**
+### 1. Clone Repository
 ```bash
-# Clone the repository
-git clone <repository-url>
+git clone <your-repo-url>
 cd rc_server_temp1
-
-# Install dependencies
-npm install
-
-# Create environment file
-cp .env.example .env
-
-# Edit environment variables
-nano .env
-
-# Start the server
-npm start
 ```
 
-## ⚙️ Configuration
+### 2. Install Dependencies
+```bash
+npm install
+```
 
-### **Environment Variables (.env)**
+### 3. Environment Configuration
+Create a `.env` file in the root directory:
+
 ```bash
 # iTick API Configuration
+ITICK_WS_AUTH_TOKEN=your_authentication_token_here
 ITICK_FOREX_WS_URL=wss://api.itick.org/fws
 ITICK_CRYPTO_WS_URL=wss://api.itick.org/cws
 ITICK_INDICES_WS_URL=wss://api.itick.org/iws
-ITICK_WS_AUTH_TOKEN=your_api_token_here
-
-# Server Configuration
-PORT=3000
-NODE_ENV=development
 ```
 
-### **WebSocket Configuration**
-The server supports three asset types with different regions:
-
-| Asset Type | Region | Description |
-|------------|--------|-------------|
-| `forex`    | `gb`   | Foreign exchange pairs |
-| `crypto`   | `ba`   | Cryptocurrency pairs |
-| `indices`  | `gb`   | Market indices |
-
-## 🚀 Usage
-
-### **Starting the Server**
+#### Complete .env File Example
 ```bash
-# Development mode with auto-restart
+# ========================================
+# RC Server Environment Configuration
+# ========================================
+
+# iTick API Authentication
+# Replace 'your_actual_token_here' with your real iTick API token
+ITICK_WS_AUTH_TOKEN=your_actual_token_here
+
+# iTick WebSocket URLs
+ITICK_FOREX_WS_URL=wss://api.itick.org/fws
+ITICK_CRYPTO_WS_URL=wss://api.itick.org/cws
+ITICK_INDICES_WS_URL=wss://api.itick.org/iws
+
+# ========================================
+# Optional Configuration
+# ========================================
+
+# Server Configuration (defaults shown)
+# PORT=3000
+# NODE_ENV=development
+
+# Logging Configuration
+# LOG_LEVEL=info
+# LOG_FILE=logs/server.log
+
+# WebSocket Configuration
+# WS_PING_INTERVAL=20000
+# WS_RECONNECT_DELAY=5000
+
+# CORS Configuration
+# CORS_ORIGIN=*
+# CORS_METHODS=GET,POST,PUT,DELETE,OPTIONS
+# CORS_HEADERS=Origin,X-Requested-With,Content-Type,Accept,Authorization
+```
+
+#### Environment Variables Reference
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `ITICK_WS_AUTH_TOKEN` | ✅ Yes | - | Your iTick API authentication token |
+| `ITICK_FOREX_WS_URL` | ✅ Yes | `wss://api.itick.org/fws` | Forex WebSocket endpoint |
+| `ITICK_CRYPTO_WS_URL` | ✅ Yes | `wss://api.itick.org/cws` | Crypto WebSocket endpoint |
+| `ITICK_INDICES_WS_URL` | ✅ Yes | `wss://api.itick.org/iws` | Indices WebSocket endpoint |
+| `PORT` | ❌ No | `3000` | Server port number |
+| `NODE_ENV` | ❌ No | `development` | Environment mode |
+| `LOG_LEVEL` | ❌ No | `info` | Logging level (debug, info, warn, error) |
+| `WS_PING_INTERVAL` | ❌ No | `20000` | WebSocket ping interval in milliseconds |
+| `WS_RECONNECT_DELAY` | ❌ No | `5000` | Reconnection delay in milliseconds |
+
+#### Security Notes
+- **Never commit your .env file to git** (it's already in .gitignore)
+- **Keep your API token secure** and rotate it regularly
+- **Use different tokens for development and production**
+- **Set proper file permissions**: `chmod 600 .env`
+
+### 4. Start Server
+```bash
+# Development mode with auto-reload
 npm run dev
 
 # Production mode
 npm start
-
-# Check server status
-curl http://localhost:3000/
 ```
 
-### **Health Check**
+## 🌐 API Endpoints
+
+### WebSocket Connection
+- **URL**: `ws://localhost:3000`
+- **Protocol**: WebSocket
+- **Authentication**: None (public endpoint)
+
+### HTTP REST Endpoints
+
+#### 1. Candlestick Data
+```
+GET /http/candlestick?type={asset_type}&code={symbol}&kType={interval}&et={timestamp}&limit={count}
+```
+
+**Parameters:**
+- `type`: Asset type (`forex`, `crypto`, `indices`)
+- `code`: Symbol code (e.g., `EURUSD`, `BTCUSD`)
+- `kType`: K-line interval
+- `et`: End timestamp
+- `limit`: Number of candles to return
+
+**Example:**
 ```bash
-GET http://localhost:3000/
+curl "http://localhost:3000/http/candlestick?type=forex&code=EURUSD&kType=1m&et=1640995200000&limit=100"
 ```
 
-**Response:**
-```json
-{
-  "status": "running",
-  "timestamp": "2024-01-01T00:00:00.000Z",
-  "connections": {
-    "forex": {"connected": true, "ready": true},
-    "crypto": {"connected": true, "ready": true},
-    "indices": {"connected": true, "ready": true}
-  }
-}
+#### 2. Quote Data
+```
+GET /http/quote?type={asset_type}&symbol={symbol}
+```
+
+**Parameters:**
+- `type`: Asset type (`forex`, `crypto`, `indices`)
+- `symbol`: Symbol code
+
+**Example:**
+```bash
+curl "http://localhost:3000/http/quote?type=forex&symbol=EURUSD"
 ```
 
 ## 📡 WebSocket Protocol
 
-### **Client Connection**
-```javascript
-// Connect to WebSocket server
-const ws = new WebSocket('ws://localhost:3000');
-```
+### Connection
+Flutter clients connect to `ws://localhost:3000` and send JSON messages for subscription management.
 
-### **Subscription Format**
-```javascript
-// Subscribe to forex
+### Message Format
+
+#### Subscribe to Symbols
+```json
 {
   "data": "forex",
-  "type": "subscribe", 
-  "symbol": "EURUSD"
+  "type": "subscribe",
+  "symbol": "EURUSD,GBPUSD"
 }
+```
 
-// Subscribe to crypto
+#### Unsubscribe from Symbols
+```json
 {
   "data": "crypto",
-  "type": "subscribe",
+  "type": "unsubscribe",
   "symbol": "BTCUSD"
 }
-
-// Subscribe to indices
-{
-  "data": "indices", 
-  "type": "subscribe",
-  "symbol": "SPX"
-}
-
-// Multiple symbols
-{
-  "data": "forex",
-  "type": "subscribe",
-  "symbol": "EURUSD,GBPUSD,USDJPY"
-}
 ```
 
-### **Unsubscription**
-```javascript
-{
-  "data": "forex",
-  "type": "unsubscribe",
-  "symbol": "EURUSD"
-}
+### Message Fields
+- **`data`**: Asset type (`forex`, `crypto`, `indices`)
+- **`type`**: Action (`subscribe` or `unsubscribe`)
+- **`symbol`**: Single symbol or comma-separated list
+
+### Supported Asset Types
+1. **Forex**: Currency pairs (e.g., EURUSD, GBPUSD)
+2. **Crypto**: Cryptocurrency pairs (e.g., BTCUSD, ETHUSD)
+3. **Indices**: Market indices (e.g., SPX500, NASDAQ)
+
+## 🔄 Data Flow Architecture
+
+```mermaid
+graph TD
+    A[iTick API] -->|WebSocket| B[WebSocketManager]
+    B -->|Message Handler| C[iTick Modules]
+    C -->|Client Lookup| D[SubscriptionManager]
+    D -->|Targeted Delivery| E[Flutter Clients]
+    
+    F[Flutter Client] -->|Subscribe/Unsubscribe| G[Flutter WebSocket Server]
+    G -->|Update Subscriptions| D
+    D -->|Upstream Subscribe| C
+    
+    H[HTTP Client] -->|REST Request| I[Express Router]
+    I -->|API Call| A
+    I -->|Response| H
 ```
 
-### **Real-Time Data Format**
-```json
-{
-  "data": {
-    "s": "EURUSD",
-    "b": "1.0850",
-    "a": "1.0851",
-    "t": 1704067200000
-  }
-}
+## 🧠 Subscription Management
+
+### Client-Symbol Mapping
+The system maintains three independent maps:
+- `forexSymbolClientMap`: Forex symbol → Set of clients
+- `cryptoSymbolClientMap`: Crypto symbol → Set of clients  
+- `indicesSymbolClientMap`: Indices symbol → Set of clients
+
+### Subscription Logic
+1. **First Client**: When first client subscribes to a symbol, upstream subscription is initiated
+2. **Additional Clients**: Subsequent clients join the symbol's client set without duplicate upstream calls
+3. **Last Client**: When last client unsubscribes, upstream unsubscription occurs
+4. **Cleanup**: Disconnected clients are automatically removed from all subscriptions
+
+### Memory Management
+- Automatic cleanup of empty symbol entries
+- Client connection state validation before message delivery
+- Efficient Set-based client collections
+
+## 🔌 WebSocket Management
+
+### Connection Handling
+- **Automatic Reconnection**: 5-second retry on connection loss
+- **Ping/Pong**: 20-second heartbeat to maintain connection
+- **Error Recovery**: Graceful error handling with logging
+
+### Message Processing
+- **JSON Parsing**: Robust message parsing with error handling
+- **Handler Registration**: Multiple message handlers per connection
+- **Filtering**: Automatic ping/pong message filtering
+
+## 📊 Logging & Monitoring
+
+### Log Levels
+- **INFO**: Connection events, subscriptions, successful operations
+- **WARN**: Invalid requests, connection issues
+- **ERROR**: Connection failures, message parsing errors
+- **DEBUG**: Development-only detailed information
+
+### Log Format
+```
+[2024-01-15T10:30:45.123Z] [INFO] [WebSocket:forex] Connected to forex WebSocket
+[2024-01-15T10:30:45.124Z] [INFO] [FlutterClient] Client connected
+[2024-01-15T10:30:45.125Z] [INFO] [SubscriptionManager] Client added to forex symbol: EURUSD
 ```
 
-## 🌐 HTTP API Reference
+## 🚀 Performance Features
 
-### **Candlestick Data**
-```bash
-GET /http/candlestick?type=forex&code=EURUSD&kType=1&et=1753695900000&limit=50
-```
+### Efficient Data Routing
+- **Targeted Delivery**: Messages sent only to subscribed clients
+- **Set Operations**: Fast client lookup and management
+- **Memory Optimization**: Automatic cleanup of disconnected clients
 
-**Parameters:**
-- `type`: Asset type (`forex`, `crypto`, `indices`)
-- `code`: Symbol code (e.g., `EURUSD`)
-- `kType`: Timeframe type (`1` = 1 minute)
-- `et`: End timestamp (milliseconds)
-- `limit`: Number of candles (max 1000)
+### Connection Management
+- **Connection Pooling**: Single upstream connection per asset type
+- **Message Broadcasting**: Efficient message distribution to multiple clients
+- **Automatic Scaling**: Handles multiple clients per symbol efficiently
 
-**Response:**
-```json
-{
-  "code": 0,
-  "msg": null,
-  "data": [
-    {
-      "tu": 1426.336458,
-      "c": 1.16762,
-      "t": 1753692900000,
-      "v": 1221.7,
-      "h": 1.16763,
-      "l": 1.1674,
-      "o": 1.16743
-    }
-  ]
-}
-```
+## 🔒 Security Features
 
-### **Real-Time Quote**
-```bash
-GET /http/quote?type=forex&symbol=EURUSD
-```
+### Environment Variable Protection
+- **No Hardcoded Secrets**: All sensitive data via environment variables
+- **Git Ignore**: `.env` file excluded from version control
+- **Runtime Validation**: Required environment variables checked at startup
 
-**Parameters:**
-- `type`: Asset type (`forex`, `crypto`, `indices`)
-- `symbol`: Symbol name (e.g., `EURUSD`)
-
-**Response:**
-```json
-{
-  "code": 0,
-  "msg": null,
-  "data": {
-    "symbol": "EURUSD",
-    "bid": "1.0850",
-    "ask": "1.0851",
-    "timestamp": 1704067200000
-  }
-}
-```
-
-## 🔧 Development
-
-### **Project Architecture**
-
-#### **1. WebSocket Manager (`websocket/WebSocketManager.js`)**
-- Generic WebSocket connection handler
-- Automatic reconnection logic
-- Message routing and error handling
-- Supports multiple asset types
-
-#### **2. Subscription Manager (`utils/subscriptionManager.js`)**
-- Manages client subscriptions per asset type
-- Tracks symbol-client mappings
-- Handles client disconnections
-- Provides subscription statistics
-
-#### **3. Flutter Client Handler (`sockets/flutterClient.js`)**
-- Handles incoming WebSocket connections
-- Parses client subscription requests
-- Routes messages to appropriate asset types
-- Manages CORS for web clients
-
-#### **4. HTTP Controllers (`http/`)**
-- REST API endpoints for historical data
-- CORS support for cross-origin requests
-- Error handling and validation
-- Proxies requests to iTick API
-
-### **Adding New Asset Types**
-
-1. **Update Configuration:**
-```javascript
-// config/websocket.js
-export const WebSocketConfig = {
-  // ... existing config
-  newAsset: {
-    url: 'wss://api.itick.org/new',
-    region: 'gb',
-    authToken: ITICK_WS_AUTH_TOKEN
-  }
-};
-```
-
-2. **Create WebSocket Handler:**
-```javascript
-// sockets/iTickNewAsset.js
-import { WebSocketManager } from '../websocket/WebSocketManager.js';
-import { WebSocketConfig } from '../config/websocket.js';
-
-let newAssetManager = null;
-
-function connectToNewAsset() {
-  if (!newAssetManager) {
-    newAssetManager = new WebSocketManager('newAsset', WebSocketConfig.newAsset);
-    // Set up message handler...
-  }
-  return newAssetManager.connect();
-}
-
-export { connectToNewAsset, subscribeSymbol, subscribeToAllSymbols };
-```
-
-3. **Update Server:**
-```javascript
-// server.js
-import { connectToNewAsset } from './sockets/iTickNewAsset.js';
-
-// Add to startServices function
-await connectToNewAsset();
-```
-
-### **Logging System**
-
-The project uses a structured logging system:
-
-```javascript
-import { Logger } from './utils/logger.js';
-
-const logger = new Logger('ComponentName');
-
-logger.info('Information message');
-logger.warn('Warning message');
-logger.error('Error message');
-logger.debug('Debug message'); // Only in development
-```
+### CORS Configuration
+- **Cross-Origin Support**: Configurable CORS headers for web applications
+- **Method Restrictions**: Controlled HTTP method access
+- **Header Management**: Secure header handling
 
 ## 🐛 Troubleshooting
 
-### **Common Issues**
+### Common Issues
 
-#### **1. WebSocket Connection Failed**
+#### 1. Connection Failures
 ```bash
 # Check environment variables
 echo $ITICK_WS_AUTH_TOKEN
 
-# Verify API credentials
-curl -H "token: $ITICK_WS_AUTH_TOKEN" https://api.itick.org/forex/quote?code=EURUSD&region=gb
-```
+# Verify network connectivity
+ping api.itick.org
 
-#### **2. CORS Errors**
-- Ensure CORS middleware is enabled
-- Check client origin in browser console
-- Verify preflight requests are handled
-
-#### **3. Subscription Not Working**
-```bash
 # Check server logs
-npm start
-
-# Verify WebSocket connection
-wscat -c ws://localhost:3000
+tail -f logs/server.log
 ```
 
-#### **4. HTTP Endpoints Not Responding**
+#### 2. Subscription Issues
 ```bash
-# Test health endpoint
-curl http://localhost:3000/
+# Check client connections
+netstat -an | grep :3000
 
-# Test candlestick endpoint
-curl "http://localhost:3000/http/candlestick?type=forex&code=EURUSD&kType=1&et=1753695900000&limit=10"
+# Verify subscription manager state
+# Add debug logging to subscriptionManager.js
 ```
 
-### **Debug Mode**
+#### 3. Environment Configuration
 ```bash
-# Enable debug logging
-NODE_ENV=development npm start
+# Validate .env file
+cat .env
+
+# Check file permissions
+ls -la .env
 ```
 
-### **Performance Monitoring**
+### Debug Mode
+Enable debug logging by setting environment variable:
 ```bash
-# Check subscription stats
-curl http://localhost:3000/ | jq '.subscriptions'
-
-# Monitor WebSocket connections
-curl http://localhost:3000/ | jq '.websocket'
+export NODE_ENV=development
+npm run dev
 ```
 
-## 📊 Monitoring & Metrics
+## 📈 Monitoring & Health Checks
 
-### **Health Endpoints**
-- `GET /` - Server status and connection info
-- WebSocket connection status per asset type
-- Subscription statistics
-- Error rates and response times
+### Health Endpoint
+```
+GET /
+Response: "Flutter HTTP+WebSocket Gateway Running"
+```
 
-### **Log Analysis**
+### Connection Status
+Monitor WebSocket connections and subscription counts in server logs.
+
+### Performance Metrics
+- Active client connections
+- Symbols with active subscriptions
+- Message delivery rates
+- Connection stability
+
+## 🔄 Deployment
+
+### Production Setup
+1. **Environment Variables**: Set production environment variables
+2. **Process Management**: Use PM2 or systemd for process management
+3. **Logging**: Configure production logging and monitoring
+4. **Security**: Implement proper firewall and access controls
+
+### Docker Deployment
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+### AWS EC2 Deployment
 ```bash
-# Filter forex logs
-npm start 2>&1 | grep "WebSocket:forex"
+# Install Node.js
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
 
-# Monitor errors
-npm start 2>&1 | grep "ERROR"
+# Clone and setup
+git clone <your-repo>
+cd rc_server_temp1
+npm install
+
+# Create .env file
+nano .env
+chmod 600 .env
+
+# Start with PM2
+npm install -g pm2
+pm2 start server.js --name "rc-server"
+pm2 startup
+pm2 save
 ```
-
-## 🔒 Security Considerations
-
-1. **API Token Protection**: Store tokens in environment variables
-2. **CORS Configuration**: Restrict origins in production
-3. **Rate Limiting**: Implement rate limiting for HTTP endpoints
-4. **Input Validation**: Validate all client inputs
-5. **Error Handling**: Don't expose sensitive information in errors
-
-## 📈 Performance Optimization
-
-1. **Connection Pooling**: Reuse WebSocket connections
-2. **Message Batching**: Batch multiple symbols in single request
-3. **Caching**: Cache frequently requested data
-4. **Load Balancing**: Distribute load across multiple instances
 
 ## 🤝 Contributing
 
@@ -461,14 +434,20 @@ npm start 2>&1 | grep "ERROR"
 
 This project is licensed under the ISC License.
 
-## 🆘 Support
+## 📞 Support
 
 For issues and questions:
-1. Check the troubleshooting section
-2. Review server logs
-3. Test with minimal configuration
-4. Create an issue with detailed information
+- Create an issue in the repository
+- Check the troubleshooting section
+- Review server logs for error details
 
----
+## 🔮 Future Enhancements
 
-**Happy Trading! 📈** 
+- **Rate Limiting**: Client request rate limiting
+- **Authentication**: WebSocket client authentication
+- **Metrics**: Prometheus metrics integration
+- **Caching**: Redis-based data caching
+- **Load Balancing**: Multiple server instances
+- **SSL/TLS**: Secure WebSocket connections
+- **API Versioning**: Versioned API endpoints
+- **Webhook Support**: Real-time event notifications 
