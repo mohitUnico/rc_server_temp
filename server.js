@@ -14,8 +14,8 @@ const server = http.createServer(app);
 // Start all services
 async function startServices() {
     try {
-        // await connectToForex();
-        await connectToCrypto();
+        await connectToForex();
+        //await connectToCrypto();
         // await connectToIndices();
         logger.info('✅ All WebSocket services started');
     } catch (error) {
