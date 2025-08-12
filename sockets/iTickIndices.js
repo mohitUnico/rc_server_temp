@@ -1,6 +1,7 @@
 import { WebSocketManager } from '../websocket/WebSocketManager.js';
 import { WebSocketConfig } from '../config/websocket.js';
 import { getAllSymbols, getClientsForSymbol } from "../utils/subscriptionManager.js";
+import { PriceUpdateService } from '../services/priceUpdateService.js';
 
 let indicesManager = null;
 
@@ -9,9 +10,15 @@ function connectToIndices() {
         indicesManager = new WebSocketManager('indices', WebSocketConfig.indices);
 
         // Set up message handler
-        indicesManager.onMessage((message, assetType) => {
+        indicesManager.onMessage(async (message, assetType) => {
             const symbol = message.data?.s;
             if (!symbol) return;
+
+            // Update price in Supabase for tracked symbols
+            const lastPrice = message.data?.ld;
+            if (lastPrice !== undefined) {
+                await PriceUpdateService.updatePrice(symbol, lastPrice, assetType);
+            }
 
             const clients = getClientsForSymbol(assetType, symbol);
             for (const client of clients) {
@@ -25,21 +32,28 @@ function connectToIndices() {
             }
         });
     }
-
     return indicesManager.connect();
 }
 
-function subscribeSymbol(symbol) {
-    if (indicesManager && indicesManager.isConnected()) {
-        indicesManager.subscribe(symbol);
+async function subscribeSymbol(symbol) {
+    if (indicesManager) {
+        return await indicesManager.subscribe(symbol);
     }
+    throw new Error('Indices WebSocket manager not initialized');
 }
 
-function subscribeToAllSymbols() {
-    const symbols = getAllSymbols('indices');
-    symbols.forEach(symbol => {
-        subscribeSymbol(symbol);
-    });
+async function subscribeToAllSymbols() {
+    if (indicesManager) {
+        return await indicesManager.subscribeToAll();
+    }
+    throw new Error('Indices WebSocket manager not initialized');
 }
 
-export { connectToIndices, subscribeSymbol, subscribeToAllSymbols }; 
+async function unsubscribeSymbol(symbol) {
+    if (indicesManager) {
+        return await indicesManager.unsubscribe(symbol);
+    }
+    throw new Error('Indices WebSocket manager not initialized');
+}
+
+export { connectToIndices, subscribeSymbol, subscribeToAllSymbols, unsubscribeSymbol }; 

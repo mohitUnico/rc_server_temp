@@ -17,26 +17,34 @@ function addClientToSymbol(assetType, symbol, client) {
     if (!map.has(symbol)) {
         map.set(symbol, new Set());
     }
-    map.get(symbol).add(client);
     const clientsSet = map.get(symbol);
+    const isFirstClient = clientsSet.size === 0;
+    clientsSet.add(client);
+
     console.log(`➕ Client added to ${assetType} symbol: ${symbol}`);
     console.log(`📊 Total clients for ${symbol}: ${clientsSet.size}`);
     let index = 1;
     for (const c of clientsSet) {
         console.log(`  Client ${index++}: readyState = ${c.readyState}`);
     }
+
+    return { isFirstClient };
 }
 
 function removeClientFromSymbol(assetType, symbol, client) {
     const map = getMapForAssetType(assetType);
     const clients = map.get(symbol);
-    if (!clients) return;
+    if (!clients) return { isLastClient: false };
+
+    const wasLastClient = clients.size === 1;
     clients.delete(client);
-    if (clients.size == 0) {
+
+    if (clients.size === 0) {
         map.delete(symbol);
-        return true;
+        return { isLastClient: true };
     }
-    return false;
+
+    return { isLastClient: false };
 }
 
 function getClientsForSymbol(assetType, symbol) {
@@ -49,14 +57,26 @@ function getAllSymbols(assetType) {
     return Array.from(map.keys());
 }
 
-function removeClientFromAllSymbol(assetType, client) {
-    const map = getMapForAssetType(assetType);
-    for (const [symbol, clients] of map.entries()) {
-        clients.delete(client);
-        if (clients.size == 0) {
-            map.delete(symbol);
+function removeClientFromAllSymbol(client) {
+    const symbolsEmptied = [];
+
+    // Check all asset types
+    const assetTypes = ['forex', 'crypto', 'indices'];
+
+    for (const assetType of assetTypes) {
+        const map = getMapForAssetType(assetType);
+        for (const [symbol, clients] of map.entries()) {
+            if (clients.has(client)) {
+                clients.delete(client);
+                if (clients.size === 0) {
+                    map.delete(symbol);
+                    symbolsEmptied.push({ assetType, symbol });
+                }
+            }
         }
     }
+
+    return symbolsEmptied;
 }
 
 export {
