@@ -1,19 +1,16 @@
 import { supabase } from '../config/supabase.js';
-import { SymbolManagementService } from './symbolManagementService.js';
+import { isSymbolTracked } from '../config/symbols.js';
 
 export class PriceUpdateService {
     static async updatePrice(symbol, lastPrice, assetType) {
         try {
-            // Check if symbol is being tracked
-            let isTracked = await SymbolManagementService.isSymbolTracked(symbol, assetType);
-
-            if (!isTracked) {
-                // Symbol not tracked, skip it to avoid trigger issues
-                console.log(`⚠️ Symbol ${symbol} not tracked for ${assetType}, skipping price update`);
-                return false;
+            // Check if symbol is in the hardcoded tracked symbols list
+            if (!isSymbolTracked(symbol, assetType)) {
+                // Symbol not tracked, don't update database but return true for client delivery
+                return { shouldUpdateDatabase: false, shouldSendToClient: true };
             }
 
-            // Update the price in symbols table
+            // Symbol is tracked, update the price in symbols table
             const { data, error } = await supabase
                 .from('symbols')
                 .update({
@@ -25,17 +22,17 @@ export class PriceUpdateService {
 
             if (error) {
                 console.error(`Failed to update price for ${symbol}:`, error);
-                return false;
+                return { shouldUpdateDatabase: false, shouldSendToClient: true };
             }
 
-            // Only log price updates occasionally (removed constant logging)
-            return true;
+            return { shouldUpdateDatabase: true, shouldSendToClient: true };
         } catch (err) {
             console.error(`Error updating price for ${symbol}:`, err);
-            return false;
+            return { shouldUpdateDatabase: false, shouldSendToClient: true };
         }
     }
 
+    // Get latest price for a symbol
     static async getLatestPrice(symbol, assetType) {
         try {
             const { data, error } = await supabase
@@ -46,77 +43,69 @@ export class PriceUpdateService {
                 .single();
 
             if (error) {
-                console.error(`Failed to get price for ${symbol}:`, error);
-                return null;
+                throw new Error(`Database error: ${error.message}`);
             }
 
             return data;
         } catch (err) {
-            console.error(`Error getting price for ${symbol}:`, err);
-            return null;
+            throw err;
         }
     }
 
-    // Get all tracked symbols with their current prices
+    // Get all tracked prices
     static async getAllTrackedPrices() {
         try {
             const { data, error } = await supabase
                 .from('symbols')
-                .select('symbol_name, symbol_type, price, last_updated')
+                .select('*')
                 .order('symbol_type')
                 .order('symbol_name');
 
             if (error) {
-                console.error('Failed to get tracked prices:', error);
-                return [];
+                throw new Error(`Database error: ${error.message}`);
             }
 
             return data || [];
         } catch (err) {
-            console.error('Error getting tracked prices:', err);
-            return [];
+            throw err;
         }
     }
 
-    // Get prices for specific asset type
+    // Get prices by asset type
     static async getPricesByAssetType(assetType) {
         try {
             const { data, error } = await supabase
                 .from('symbols')
-                .select('symbol_name, price, last_updated')
+                .select('*')
                 .eq('symbol_type', assetType)
                 .order('symbol_name');
 
             if (error) {
-                console.error(`Failed to get ${assetType} prices:`, error);
-                return [];
+                throw new Error(`Database error: ${error.message}`);
             }
 
             return data || [];
         } catch (err) {
-            console.error(`Error getting ${assetType} prices:`, err);
-            return [];
+            throw err;
         }
     }
 
-    // Get symbol by name (any asset type)
+    // Get symbol by name
     static async getSymbolByName(symbolName) {
         try {
             const { data, error } = await supabase
                 .from('symbols')
                 .select('*')
-                .eq('symbol_name', symbolName.toUpperCase())
+                .eq('symbol_name', symbolName)
                 .order('symbol_type');
 
             if (error) {
-                console.error(`Failed to get symbol ${symbolName}:`, error);
-                return [];
+                throw new Error(`Database error: ${error.message}`);
             }
 
             return data || [];
         } catch (err) {
-            console.error(`Error getting symbol ${symbolName}:`, err);
-            return [];
+            throw err;
         }
     }
 }

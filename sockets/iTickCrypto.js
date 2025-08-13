@@ -1,59 +1,69 @@
+import WebSocket from 'ws';
 import { WebSocketManager } from '../websocket/WebSocketManager.js';
 import { WebSocketConfig } from '../config/websocket.js';
-import { getAllSymbols, getClientsForSymbol } from "../utils/subscriptionManager.js";
 import { PriceUpdateService } from '../services/priceUpdateService.js';
+import { getClientsForSymbol, removeClientFromSymbol } from '../utils/subscriptionManager.js';
 
 let cryptoManager = null;
 
-function connectToCrypto() {
+export async function connectToCrypto() {
     if (!cryptoManager) {
         cryptoManager = new WebSocketManager('crypto', WebSocketConfig.crypto);
 
-        // Set up message handler
+        // Set up message handler for incoming data
         cryptoManager.onMessage(async (message, assetType) => {
-            const symbol = message.data?.s;
-            if (!symbol) return;
+            try {
+                // Extract symbol and price from message
+                const symbol = message.data?.s;           // Symbol (e.g., 'BTCUSD')
+                const lastPrice = message.data?.ld;       // Last price (e.g., 65000.00)
 
-            // Update price in Supabase for tracked symbols
-            const lastPrice = message.data?.ld;
-            if (lastPrice !== undefined) {
-                await PriceUpdateService.updatePrice(symbol, lastPrice, assetType);
-            }
+                if (symbol && lastPrice !== undefined) {
+                    // Check if symbol is tracked and update database if needed
+                    const updateResult = await PriceUpdateService.updatePrice(symbol, lastPrice, assetType);
+                }
 
-            const clients = getClientsForSymbol(assetType, symbol);
-            for (const client of clients) {
-                if (client.readyState === 1) { // WebSocket.OPEN
-                    try {
-                        client.send(JSON.stringify(message));
-                    } catch (error) {
-                        console.error('Error sending message to client:', error);
+                // Always get clients subscribed to this symbol (regardless of tracking status)
+                const clients = getClientsForSymbol(assetType, symbol);
+
+                if (clients && clients.size > 0) {
+                    // Send data to all subscribed clients
+                    for (const client of clients) {
+                        if (client.readyState === 1) { // WebSocket.OPEN
+                            try {
+                                client.send(JSON.stringify(message));
+                            } catch (error) {
+                                console.error(`Error sending message to client for ${symbol}:`, error);
+                            }
+                        }
                     }
                 }
+
+            } catch (error) {
+                console.error(`Error processing ${assetType} message for ${symbol}:`, error);
             }
         });
     }
+
     return cryptoManager.connect();
 }
 
-async function subscribeSymbol(symbol) {
+export async function subscribeSymbol(symbol) {
     if (cryptoManager) {
         return await cryptoManager.subscribe(symbol);
     }
-    throw new Error('Crypto WebSocket manager not initialized');
+    throw new Error('Crypto manager not initialized');
 }
 
-async function subscribeToAllSymbols() {
+export async function subscribeToAllSymbols() {
     if (cryptoManager) {
-        return await cryptoManager.subscribeToAll();
+        return await cryptoManager.subscribeToAllSymbols();
     }
-    throw new Error('Crypto WebSocket manager not initialized');
+    throw new Error('Crypto manager not initialized');
 }
 
-async function unsubscribeSymbol(symbol) {
+export async function unsubscribeSymbol(symbol) {
     if (cryptoManager) {
         return await cryptoManager.unsubscribe(symbol);
     }
-    throw new Error('Crypto WebSocket manager not initialized');
-}
-
-export { connectToCrypto, subscribeSymbol, subscribeToAllSymbols, unsubscribeSymbol }; 
+    throw new Error('Crypto manager not initialized');
+} 
