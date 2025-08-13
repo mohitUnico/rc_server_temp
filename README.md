@@ -256,7 +256,7 @@ class WebSocketManager {
         
         // 3. Start ping/pong health monitoring
         this.startPing(this.socket, this.pingInterval);
-    }
+  }
 }
 ```
 
@@ -1320,7 +1320,7 @@ const ws = new WebSocket('ws://localhost:3000');
 ```json
 {
   "action": "subscribe",
-  "symbol": "EURUSD",
+    "symbol": "EURUSD",
   "assetType": "forex"
 }
 ```
