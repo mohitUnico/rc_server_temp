@@ -103,7 +103,7 @@ export class EmailService {
                 `,
                 attachments: [{
                     filename: 'logo.svg',
-                    path: '/Users/mohitkumarpal/My workspace/rc_server_temp1/assets/Frame 1000001664.svg',
+                    path: '/home/ubuntu/my_workspace/rc_server_temp/assets/raz_caps_logo.svg',
                     cid: 'logo'
                 }]
             };
