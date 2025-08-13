@@ -1,8 +1,8 @@
 import { SymbolManagementService } from '../services/symbolManagementService.js';
 
 const defaultSymbols = {
-    forex: ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'XAUUSD', 'XAGUSD'],
-    crypto: ['BTCUSD', 'ETHUSD', 'ADAUSD', 'DOTUSD', 'LINKUSD', 'LTCUSD', 'BCHUSD'],
+    forex: ['EURUSD', 'GBPUSD', 'GBPCAD', 'GBPCHF', 'GBPJPY', 'NZDJPY', 'NZDUSD', 'TWDUSD', 'USDAED', 'USDJPY', 'AUDUSD', 'USDCAD', 'XAUUSD', 'XAGUSD'],
+    crypto: ['BTCUSDT', 'ETHUSD', 'ADAUSD', 'DOTUSD', 'LINKUSD', 'LTCUSD', 'BCHUSD'],
     indices: ['SPX500', 'NAS100', 'DOW30', 'FTSE100', 'DAX30', 'NIK225', 'ASX200']
 };
 
