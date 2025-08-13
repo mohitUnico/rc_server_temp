@@ -30,12 +30,17 @@ app.get('/health', (req, res) => {
 import './http/candlestick.js';
 import './http/quote.js';
 import './http/symbols.js';
+import './http/tradingCredentials.js';
 
 // Apply routes to app
 app.use('/http', (req, res, next) => {
     // This middleware will be replaced by the actual route handlers
     next();
 });
+
+// Explicitly register trading credentials routes
+import tradingCredentialsRouter from './http/tradingCredentials.js';
+app.use('/http', tradingCredentialsRouter);
 
 // Graceful shutdown handling
 let isShuttingDown = false;
@@ -104,6 +109,7 @@ async function startServer() {
         server.listen(PORT, () => {
             logger.info(`🚀 Server running on port ${PORT}`);
             logger.info('🎯 Architecture: Client Subscribe → iTick Data → Check Tracking → Update DB if Tracked → Send to Clients');
+            logger.info('📧 New Feature: Trading Credentials Email Service Available');
         });
 
     } catch (error) {

@@ -90,10 +90,20 @@ ITICK_WS_URL=wss://ws.itick.com
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key
 
+# Email Service Configuration
+EMAIL_USER=your-email@gmail.com
+EMAIL_APP_PASSWORD=your-gmail-app-password
+
 # Server Configuration
 PORT=3000
 NODE_ENV=development
 ```
+
+**📧 Email Service Setup:**
+1. **Enable 2FA** on your Gmail account
+2. **Generate App Password**: Go to Google Account → Security → 2-Step Verification → App passwords
+3. **Create App Password** for "Mail" application
+4. **Use App Password** in `EMAIL_APP_PASSWORD` (not your regular password)
 
 ### **3. Database Setup**
 In Supabase SQL Editor, ensure you have:
@@ -156,11 +166,13 @@ rc_server_temp1/
 ├── 📁 http/                      # HTTP REST API Layer
 │   ├── 📄 candlestick.js        # Historical Data Endpoints
 │   ├── 📄 quote.js              # Real-time Quote Endpoints
-│   └── 📄 symbols.js            # Symbol Management API
+│   ├── 📄 symbols.js            # Symbol Management API
+│   └── 📄 tradingCredentials.js # Email Service API
 ├── 📁 services/                  # Business Service Layer
 │   ├── 📄 databaseService.js    # Database Operations
 │   ├── 📄 symbolManagementService.js # Symbol CRUD Operations
-│   └── 📄 priceUpdateService.js # Price Update Logic
+│   ├── 📄 priceUpdateService.js # Price Update Logic
+│   └── 📄 emailService.js       # Email Service for Trading Credentials
 ├── 📁 sockets/                   # WebSocket Implementation Layer
 │   ├── 📄 flutterClient.js      # Flutter Client WebSocket Server
 │   ├── 📄 iTickForex.js         # Forex Data Connection
@@ -846,6 +858,453 @@ GET /http/candlestick?symbol=EURUSD&timeframe=1h&limit=100
 GET /http/quote?symbol=EURUSD
 ```
 
+### **Email Service**
+
+#### **Send Trading Credentials**
+```http
+POST /http/trading-credentials
+Content-Type: application/json
+
+{
+  "emailID": "user@example.com",
+  "tradingID": "TRADER123",
+  "tradingPassword": "securepassword123"
+}
+```
+
+**Request Details:**
+- **Method:** `POST`
+- **URL:** `http://localhost:3000/http/trading-credentials`
+- **Headers:** `Content-Type: application/json`
+- **Body:** JSON object with required fields
+
+**Required Fields:**
+- `emailID` (string): Valid email address where credentials will be sent
+- `tradingID` (string): Trading account identifier (min 3 characters)
+- `tradingPassword` (string): Trading account password (min 6 characters)
+
+**Field Validation:**
+- **Email:** Must be valid email format (e.g., `user@domain.com`)
+- **Trading ID:** Alphanumeric + underscore + hyphen, min 3 chars
+- **Password:** Minimum 6 characters, any characters allowed
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Trading credentials sent successfully",
+  "data": {
+    "emailID": "user@example.com",
+    "tradingID": "TRADER123",
+    "tradingPassword": "securepassword123",
+    "messageId": "abc123@email.com",
+    "sentAt": "2025-01-15T10:30:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+
+**400 - Missing/Invalid Fields:**
+```json
+{
+  "success": false,
+  "error": "Missing required fields",
+  "message": "emailID, tradingID, and tradingPassword are required",
+  "required": ["emailID", "tradingID", "tradingPassword"]
+}
+```
+
+**400 - Invalid Email:**
+```json
+{
+  "success": false,
+  "error": "Invalid email format",
+  "message": "Please provide a valid email address"
+}
+```
+
+**400 - Invalid Trading ID:**
+```json
+{
+  "success": false,
+  "error": "Invalid trading ID",
+  "message": "Trading ID must be at least 3 characters long"
+}
+```
+
+**400 - Invalid Password:**
+```json
+{
+  "success": false,
+  "error": "Invalid trading password",
+  "message": "Trading password must be at least 6 characters long"
+}
+```
+
+**500 - Email Service Error:**
+```json
+{
+  "success": false,
+  "error": "Email sending failed",
+  "message": "Failed to send trading credentials",
+  "details": "SMTP connection failed"
+}
+```
+
+#### **Check Email Service Status**
+```http
+GET /http/trading-credentials/status
+Response: {"service": "gmail", "user": "Configured", "appPassword": "Configured"}
+```
+
+#### **Test Email Service**
+```http
+POST /http/trading-credentials/test
+Response: {"success": true, "message": "Email service test successful"}
+```
+
+---
+
+## 📱 **Client Implementation Examples**
+
+### **Flutter/Dart Example**
+```dart
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+class TradingCredentialsService {
+  static const String baseUrl = 'http://localhost:3000';
+  
+  static Future<Map<String, dynamic>> sendTradingCredentials({
+    required String emailID,
+    required String tradingID,
+    required String tradingPassword,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/http/trading-credentials'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'emailID': emailID,
+          'tradingID': tradingID,
+          'tradingPassword': tradingPassword,
+        }),
+      );
+      
+      final data = jsonDecode(response.body);
+      
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'data': data['data'],
+          'message': data['message'],
+        };
+      } else {
+        return {
+          'success': false,
+          'error': data['error'],
+          'message': data['message'],
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Network Error',
+        'message': 'Failed to connect to server: $e',
+      };
+    }
+  }
+  
+  static Future<Map<String, dynamic>> checkEmailServiceStatus() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/http/trading-credentials/status'),
+      );
+      
+      final data = jsonDecode(response.body);
+      return data;
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Network Error',
+        'message': 'Failed to check service status: $e',
+      };
+    }
+  }
+}
+
+// Usage Example
+void main() async {
+  // Check service status first
+  final status = await TradingCredentialsService.checkEmailServiceStatus();
+  print('Email Service Status: $status');
+  
+  // Send trading credentials
+  final result = await TradingCredentialsService.sendTradingCredentials(
+    emailID: 'user@example.com',
+    tradingID: 'TRADER123',
+    tradingPassword: 'securepass123',
+  );
+  
+  if (result['success']) {
+    print('✅ Credentials sent: ${result['message']}');
+    print('📧 Message ID: ${result['data']['messageId']}');
+  } else {
+    print('❌ Failed: ${result['message']}');
+  }
+}
+```
+
+### **JavaScript/Node.js Example**
+```javascript
+class TradingCredentialsClient {
+  constructor(baseUrl = 'http://localhost:3000') {
+    this.baseUrl = baseUrl;
+  }
+  
+  async sendTradingCredentials(emailID, tradingID, tradingPassword) {
+    try {
+      const response = await fetch(`${this.baseUrl}/http/trading-credentials`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          emailID,
+          tradingID,
+          tradingPassword,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        return {
+          success: true,
+          data: data.data,
+          message: data.message,
+        };
+      } else {
+        return {
+          success: false,
+          error: data.error,
+          message: data.message,
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: 'Network Error',
+        message: `Failed to connect to server: ${error.message}`,
+      };
+    }
+  }
+  
+  async checkEmailServiceStatus() {
+    try {
+      const response = await fetch(`${this.baseUrl}/http/trading-credentials/status`);
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      return {
+        success: false,
+        error: 'Network Error',
+        message: `Failed to check service status: ${error.message}`,
+      };
+    }
+  }
+}
+
+// Usage Example
+const client = new TradingCredentialsClient();
+
+async function testEmailService() {
+  // Check service status
+  const status = await client.checkEmailServiceStatus();
+  console.log('Email Service Status:', status);
+  
+  // Send trading credentials
+  const result = await client.sendTradingCredentials(
+    'user@example.com',
+    'TRADER123',
+    'securepass123'
+  );
+  
+  if (result.success) {
+    console.log('✅ Credentials sent:', result.message);
+    console.log('📧 Message ID:', result.data.messageId);
+  } else {
+    console.log('❌ Failed:', result.message);
+  }
+}
+
+testEmailService();
+```
+
+### **Python Example**
+```python
+import requests
+import json
+
+class TradingCredentialsClient:
+    def __init__(self, base_url='http://localhost:3000'):
+        self.base_url = base_url
+    
+    def send_trading_credentials(self, email_id, trading_id, trading_password):
+        try:
+            response = requests.post(
+                f'{self.base_url}/http/trading-credentials',
+                headers={'Content-Type': 'application/json'},
+                json={
+                    'emailID': email_id,
+                    'tradingID': trading_id,
+                    'tradingPassword': trading_password
+                }
+            )
+            
+            data = response.json()
+            
+            if response.status_code == 200:
+                return {
+                    'success': True,
+                    'data': data['data'],
+                    'message': data['message']
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': data['error'],
+                    'message': data['message']
+                }
+        except requests.exceptions.RequestException as e:
+            return {
+                'success': False,
+                'error': 'Network Error',
+                'message': f'Failed to connect to server: {str(e)}'
+            }
+    
+    def check_email_service_status(self):
+        try:
+            response = requests.get(f'{self.base_url}/http/trading-credentials/status')
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            return {
+                'success': False,
+                'error': 'Network Error',
+                'message': f'Failed to check service status: {str(e)}'
+            }
+
+# Usage Example
+if __name__ == '__main__':
+    client = TradingCredentialsClient()
+    
+    # Check service status
+    status = client.check_email_service_status()
+    print('Email Service Status:', status)
+    
+    # Send trading credentials
+    result = client.send_trading_credentials(
+        'user@example.com',
+        'TRADER123',
+        'securepass123'
+    )
+    
+    if result['success']:
+        print('✅ Credentials sent:', result['message'])
+        print('📧 Message ID:', result['data']['messageId'])
+    else:
+        print('❌ Failed:', result['message'])
+```
+
+### **cURL Examples**
+```bash
+# 1. Check email service status
+curl http://localhost:3000/http/trading-credentials/status
+
+# 2. Test email service connection
+curl -X POST http://localhost:3000/http/trading-credentials/test
+
+# 3. Send trading credentials
+curl -X POST http://localhost:3000/http/trading-credentials \
+  -H "Content-Type: application/json" \
+  -d '{
+    "emailID": "user@example.com",
+    "tradingID": "TRADER123",
+    "tradingPassword": "securepass123"
+  }'
+
+# 4. Send with different credentials
+curl -X POST http://localhost:3000/http/trading-credentials \
+  -H "Content-Type: application/json" \
+  -d '{
+    "emailID": "trader@company.com",
+    "tradingID": "FX_001",
+    "tradingPassword": "mypassword456"
+  }'
+```
+
+### **Postman Collection**
+```json
+{
+  "info": {
+    "name": "Trading Credentials API",
+    "description": "API endpoints for sending trading credentials via email"
+  },
+  "item": [
+    {
+      "name": "Send Trading Credentials",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"emailID\": \"user@example.com\",\n  \"tradingID\": \"TRADER123\",\n  \"tradingPassword\": \"securepass123\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/http/trading-credentials",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["http", "trading-credentials"]
+        }
+      }
+    },
+    {
+      "name": "Check Email Service Status",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:3000/http/trading-credentials/status",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["http", "trading-credentials", "status"]
+        }
+      }
+    },
+    {
+      "name": "Test Email Service",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "http://localhost:3000/http/trading-credentials/test",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["http", "trading-credentials", "test"]
+        }
+      }
+    }
+  ]
+}
+```
+
 ---
 
 ## 🔌 WebSocket Communication
@@ -955,10 +1414,22 @@ ITICK_WS_AUTH_TOKEN=your_token
 SUPABASE_URL=your_supabase_url
 SUPABASE_ANON_KEY=your_supabase_key
 
+# Email Service Configuration
+EMAIL_USER=your-email@gmail.com
+EMAIL_APP_PASSWORD=your-gmail-app-password
+
 # Optional
 PORT=3000
 NODE_ENV=development
 LOG_LEVEL=info
+SUPPORT_EMAIL=support@yourcompany.com
+TEST_EMAIL=test@example.com
+
+# Alternative Email Providers (if not using Gmail)
+# EMAIL_PASSWORD=your-regular-password  # For Outlook/Hotmail
+# SMTP_HOST=smtp.yourprovider.com       # Custom SMTP
+# SMTP_PORT=587                         # Custom SMTP port
+# SMTP_SECURE=false                     # Custom SMTP security
 ```
 
 ### **WebSocket Configuration**
@@ -990,6 +1461,9 @@ curl http://localhost:3000/http/tracked
 
 # Get prices
 curl http://localhost:3000/http/prices
+
+# Test email service
+curl http://localhost:3000/http/trading-credentials/status
 ```
 
 ### **Test WebSocket**
@@ -1007,6 +1481,27 @@ wscat -c ws://localhost:3000
 curl -X POST http://localhost:3000/http/tracked \
   -H "Content-Type: application/json" \
   -d '{"symbol": "BTCUSD", "asset_type": "crypto"}'
+```
+
+### **Test Email Service**
+```bash
+# Check email service status
+curl http://localhost:3000/http/trading-credentials/status
+
+# Test email service connection
+curl -X POST http://localhost:3000/http/trading-credentials/test
+
+# Send test trading credentials
+curl -X POST http://localhost:3000/http/trading-credentials \
+  -H "Content-Type: application/json" \
+  -d '{
+    "emailID": "test@example.com",
+    "tradingID": "TEST123",
+    "tradingPassword": "testpass123"
+  }'
+
+# Or use npm script
+npm run test-email
 ```
 
 ---
