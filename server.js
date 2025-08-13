@@ -26,20 +26,16 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Import and use HTTP routes
-import './http/candlestick.js';
-import './http/quote.js';
-import './http/symbols.js';
-import './http/tradingCredentials.js';
+// Import HTTP routes
+import candlestickRouter from './http/candlestick.js';
+import quoteRouter from './http/quote.js';
+import symbolsRouter from './http/symbols.js';
+import tradingCredentialsRouter from './http/tradingCredentials.js';
 
 // Apply routes to app
-app.use('/http', (req, res, next) => {
-    // This middleware will be replaced by the actual route handlers
-    next();
-});
-
-// Explicitly register trading credentials routes
-import tradingCredentialsRouter from './http/tradingCredentials.js';
+app.use('/http', candlestickRouter);
+app.use('/http', quoteRouter);
+app.use('/http', symbolsRouter);
 app.use('/http', tradingCredentialsRouter);
 
 // Graceful shutdown handling
