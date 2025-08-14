@@ -102,8 +102,8 @@ export class EmailService {
                     </html>
                 `,
                 attachments: [{
-                    filename: 'logo.svg',
-                    path: '/home/ubuntu/my_workspace/rc_server_temp/assets/raz_caps_logo.svg',
+                    filename: 'logo.png',
+                    path: '/Users/mohitkumarpal/My workspace/rc_server_temp1/assets/raz_caps_logo.png',
                     cid: 'logo'
                 }]
             };
