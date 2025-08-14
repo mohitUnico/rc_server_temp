@@ -103,7 +103,7 @@ export class EmailService {
                 `,
                 attachments: [{
                     filename: 'logo.png',
-                    path: '/Users/mohitkumarpal/My workspace/rc_server_temp1/assets/raz_caps_logo.png',
+                    path: process.env.LOGO_PATH,
                     cid: 'logo'
                 }]
             };
