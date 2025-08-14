@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { LOGO_PATH } from '../config/envConfig.js';
 
 export class EmailService {
     constructor() {
@@ -103,7 +104,7 @@ export class EmailService {
                 `,
                 attachments: [{
                     filename: 'logo.png',
-                    path: process.env.LOGO_PATH,
+                    path: LOGO_PATH,
                     cid: 'logo'
                 }]
             };
