@@ -1,0 +1,568 @@
+import OrderRepository from '../repositories/OrderRepository.js';
+import Order from '../models/Order.js';
+import { Logger } from '../utils/logger.js';
+import { OrderStatus, OrderType } from '../enums/orderEnums.js';
+import TradeRepository from '../repositories/TradeRepository.js';
+import PositionRepository from '../repositories/PositionRepository.js';
+import { PositionType } from '../enums/positionEnums.js';
+import PriceService from '../services/priceService.js';
+
+const logger = new Logger('OrderController');
+const orderRepository = new OrderRepository();
+const tradeRepository = new TradeRepository();
+const positionRepository = new PositionRepository();
+
+/**
+ * Controller for order-related HTTP handlers
+ */
+class OrderController {
+	/**
+	 * Place a new order
+	 * Expected body: accountId, instrumentId, orderType, lotSize, limitValue, slPrice|sl, tpPrice|tp, price, status
+	 */
+	static async placeOrder(req, res) {
+		try {
+			const {
+				accountId,
+				instrumentId,
+				orderType,
+				lotSize,
+				limitValue = null,
+				sl = null,
+				tp = null,
+				price = 0,
+				status = OrderStatus.PENDING
+			} = req.body || {};
+
+			if (!accountId || !instrumentId || !orderType || !lotSize) {
+				return res.status(400).json({
+					error: 'Missing required fields: accountId, instrumentId, orderType, lotSize'
+				});
+			}
+
+			// If market order, automatically fetch current price if not provided
+			const isMarketOrder = orderType === OrderType.MARKET_BUY || orderType === OrderType.MARKET_SELL;
+			let finalPrice = price;
+
+			if (isMarketOrder) {
+				if (!price || price <= 0) {
+					try {
+						logger.info(`Fetching current price for market order - instrumentId: ${instrumentId}`);
+						finalPrice = await PriceService.getCurrentPrice(instrumentId);
+						logger.info(`Current price fetched: ${finalPrice}`);
+					} catch (error) {
+						logger.error('Failed to fetch current price for market order:', error);
+						return res.status(400).json({ 
+							error: `Failed to fetch current price for market order: ${error.message}` 
+						});
+					}
+				}
+			}
+
+			const orderData = {
+				account_id: accountId,
+				instrument_id: instrumentId,
+				order_type: orderType,
+				lot_size: lotSize,
+				limit_value: limitValue,
+				sl_price: sl,
+				tp_price: tp,
+				price: finalPrice,
+				status
+			};
+
+			// If market order, immediately fill and create trade + position
+			if (isMarketOrder) {
+				// 1) Place pending market order
+				const placedOrder = await orderRepository.placeOrder(orderData);
+
+				// 2) Fill order at current price
+				const filledOrder = await orderRepository.fillOrder(placedOrder.id, finalPrice);
+
+				// 3) Create trade
+				const side = orderType === OrderType.MARKET_BUY ? 'buy' : 'sell';
+				const trade = await tradeRepository.createTrade({
+					orderId: filledOrder.id,
+					accountId: accountId,
+					symbolId: instrumentId,
+					side,
+					quantity: lotSize,
+					price: finalPrice,
+					fee: null
+				});
+
+				// 4) Create position
+				const positionType = side === 'buy' ? PositionType.BUY : PositionType.SELL;
+				const position = await positionRepository.createPosition({
+					accountId: accountId,
+					instrumentId: instrumentId,
+					positionType,
+					lotSize: lotSize,
+					entryPrice: finalPrice,
+					slPrice: sl,
+					tpPrice: tp,
+					marginUsed: 0
+				});
+
+				return res.status(201).json({ 
+					order: filledOrder, 
+					trade, 
+					position,
+					executedPrice: finalPrice 
+				});
+			}
+
+			// Non-market: normal creation
+			const created = await orderRepository.placeOrder(orderData);
+			return res.status(201).json(created);
+		} catch (error) {
+			logger.error('placeOrder failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	/**
+	 * Modify an existing order (only pending orders can be modified)
+	 * Body may include: limitValue, slPrice|sl, tpPrice|tp; ID can be in params.id or body.orderId/body.id
+	 */
+	static async modifyOrder(req, res) {
+		try {
+			const id = req.params?.id || req.body?.orderId || req.body?.id;
+			if (!id) {
+				return res.status(400).json({ error: 'Missing required field: order id' });
+			}
+
+			// First, get the current order to check its status
+			const currentOrder = await orderRepository.findOrderById(id);
+			if (!currentOrder) {
+				return res.status(404).json({ error: 'Order not found' });
+			}
+
+			// Only pending orders can be modified
+			if (currentOrder.status !== OrderStatus.PENDING) {
+				return res.status(400).json({ 
+					error: `Order cannot be modified. Current status: ${currentOrder.status}. Only pending orders can be modified.` 
+				});
+			}
+
+			// Market orders (marketBuy/marketSell) cannot be modified as they are immediately filled
+			if (currentOrder.orderType === OrderType.MARKET_BUY || currentOrder.orderType === OrderType.MARKET_SELL) {
+				return res.status(400).json({ 
+					error: `Market orders (${currentOrder.orderType}) cannot be modified as they are immediately executed.` 
+				});
+			}
+
+			const updates = {
+				limitValue: req.body?.limitValue,
+				slPrice: req.body?.slPrice ?? req.body?.sl,
+				tpPrice: req.body?.tpPrice ?? req.body?.tp
+			};
+
+			const updated = await orderRepository.modifyOrder(id, updates);
+			return res.json(updated);
+		} catch (error) {
+			logger.error('modifyOrder failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	/**
+	 * Cancel an existing order by ID
+	 */
+	static async cancelOrder(req, res) {
+		try {
+			const id = req.params?.id || req.body?.orderId || req.body?.id;
+			if (!id) {
+				return res.status(400).json({ error: 'Missing required field: order id' });
+			}
+
+			const cancelled = await orderRepository.cancelOrder(id);
+			return res.json(cancelled);
+		} catch (error) {
+			logger.error('cancelOrder failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	/**
+	 * Delete an order by ID
+	 */
+	static async deleteOrder(req, res) {
+		try {
+			const id = req.params?.id || req.body?.orderId || req.body?.id;
+			if (!id) {
+				return res.status(400).json({ error: 'Missing required field: order id' });
+			}
+
+			await orderRepository.deleteOrder(id);
+			return res.status(200).json({ success: true });
+		} catch (error) {
+			logger.error('deleteOrder failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	/**
+	 * Get a single order by ID
+	 */
+	static async getOrderById(req, res) {
+		try {
+			const id = req.params?.id || req.query?.id;
+			if (!id) {
+				return res.status(400).json({ error: 'Missing required field: id' });
+			}
+
+			const order = await orderRepository.findOrderById(id);
+			if (!order) {
+				return res.status(404).json({ error: 'Order not found' });
+			}
+			return res.json(order);
+		} catch (error) {
+			logger.error('getOrderById failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	/**
+	 * Get all orders with optional pagination and filters
+	 * Query: page, limit, status, accountId, instrumentId
+	 */
+	static async getAllOrders(req, res) {
+		try {
+			const page = parseInt(req.query.page || '1', 10);
+			const limit = parseInt(req.query.limit || '20', 10);
+
+			const filters = {};
+			if (req.query.status) filters.status = req.query.status;
+			if (req.query.accountId) filters.account_id = req.query.accountId;
+			if (req.query.instrumentId) filters.instrument_id = req.query.instrumentId;
+
+			const result = await orderRepository.getOrdersWithPagination(page, limit, filters);
+			return res.json(result);
+		} catch (error) {
+			logger.error('getAllOrders failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	/**
+	 * Get orders by account
+	 */
+	static async getOrdersByAccount(req, res) {
+		try {
+			const { accountId } = req.params;
+			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
+			const orders = await orderRepository.findOrdersByAccountId(accountId);
+			return res.json(orders);
+		} catch (error) {
+			logger.error('getOrdersByAccount failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	/**
+	 * Get orders by status (optionally by account)
+	 */
+	static async getOrdersByStatus(req, res) {
+		try {
+			const { status } = req.params;
+			const { accountId } = req.query;
+			if (!status) return res.status(400).json({ error: 'status is required' });
+			const orders = await orderRepository.findOrdersByStatus(status, accountId || null);
+			return res.json(orders);
+		} catch (error) {
+			logger.error('getOrdersByStatus failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	/**
+	 * Get placed/pending/filled/cancelled helpers
+	 */
+	static async getPlacedOrders(req, res) {
+		try {
+			const { accountId } = req.query;
+			const orders = await orderRepository.findPlacedOrders(accountId || null);
+			return res.json(orders);
+		} catch (error) {
+			logger.error('getPlacedOrders failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	static async getFilledOrders(req, res) {
+		try {
+			const { accountId } = req.query;
+			const orders = await orderRepository.findFilledOrders(accountId || null);
+			return res.json(orders);
+		} catch (error) {
+			logger.error('getFilledOrders failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	static async getCancelledOrders(req, res) {
+		try {
+			const { accountId } = req.query;
+			const orders = await orderRepository.findCancelledOrders(accountId || null);
+			return res.json(orders);
+		} catch (error) {
+			logger.error('getCancelledOrders failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	/**
+	 * Get orders by instrument for an account
+	 */
+	static async getOrdersByInstrument(req, res) {
+		try {
+			const { accountId, instrumentId } = req.params;
+			if (!accountId || !instrumentId) {
+				return res.status(400).json({ error: 'accountId and instrumentId are required' });
+			}
+			const orders = await orderRepository.findOrdersByInstrument(accountId, instrumentId);
+			return res.json(orders);
+		} catch (error) {
+			logger.error('getOrdersByInstrument failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	/**
+	 * Fill an existing order (market execution style)
+	 */
+	static async fillOrder(req, res) {
+		try {
+			const id = req.params?.id || req.body?.orderId || req.body?.id;
+			const { price } = req.body || {};
+			if (!id || price === undefined) {
+				return res.status(400).json({ error: 'id and price are required' });
+			}
+			const filled = await orderRepository.fillOrder(id, price);
+			return res.json(filled);
+		} catch (error) {
+			logger.error('fillOrder failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	/**
+	 * Place a market order and immediately create trade and position
+	 * Body: accountId, instrumentId, side ('buy'|'sell'), lotSize, price?, slPrice?, tpPrice?
+	 */
+	static async executeMarketOrder(req, res) {
+		try {
+			const { accountId, instrumentId, side, lotSize, price, sl = null, tp = null } = req.body || {};
+			if (!accountId || !instrumentId || !side || !lotSize) {
+				return res.status(400).json({ error: 'accountId, instrumentId, side, lotSize are required' });
+			}
+
+			// Get current price if not provided
+			let finalPrice = price;
+			if (!price || price <= 0) {
+				try {
+					logger.info(`Fetching current price for market order execution - instrumentId: ${instrumentId}`);
+					finalPrice = await PriceService.getCurrentPrice(instrumentId);
+					logger.info(`Current price fetched: ${finalPrice}`);
+				} catch (error) {
+					logger.error('Failed to fetch current price for market order execution:', error);
+					return res.status(400).json({ 
+						error: `Failed to fetch current price for market order: ${error.message}` 
+					});
+				}
+			}
+
+			// 1) Create pending market order
+			const orderType = side === 'buy' ? 'marketBuy' : 'marketSell';
+			const orderData = {
+				account_id: accountId,
+				instrument_id: instrumentId,
+				order_type: orderType,
+				lot_size: lotSize,
+				status: OrderStatus.PENDING,
+				price: finalPrice,
+				sl_price: sl,
+				tp_price: tp
+			};
+			const placedOrder = await orderRepository.placeOrder(orderData);
+
+			// 2) Fill the order at current price
+			const filledOrder = await orderRepository.fillOrder(placedOrder.id, finalPrice);
+
+			// 3) Create trade
+			const trade = await tradeRepository.createTrade({
+				orderId: filledOrder.id,
+				accountId: accountId,
+				symbolId: instrumentId,
+				side: side,
+				quantity: lotSize,
+				price: finalPrice,
+				fee: null
+			});
+
+			// 4) Create position
+			const positionType = side === 'buy' ? PositionType.BUY : PositionType.SELL;
+			const position = await positionRepository.createPosition({
+				accountId: accountId,
+				instrumentId: instrumentId,
+				positionType: positionType,
+				lotSize: lotSize,
+				entryPrice: finalPrice,
+				slPrice: sl,
+				tpPrice: tp,
+				marginUsed: 0 // optionally compute margin here if needed
+			});
+
+			return res.status(201).json({ 
+				order: filledOrder, 
+				trade, 
+				position,
+				executedPrice: finalPrice 
+			});
+		} catch (error) {
+			logger.error('executeMarketOrder failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	/**
+	 * Filter orders by arbitrary parameters (same as getAll but without pagination if not provided)
+	 */
+	static async filterOrders(req, res) {
+		try {
+			const allowed = ['status', 'account_id', 'instrument_id', 'order_type'];
+			const rawFilters = req.body?.filters || req.query || {};
+			const filters = {};
+			for (const key of allowed) {
+				if (rawFilters[key] !== undefined) filters[key] = rawFilters[key];
+			}
+
+			const page = rawFilters.page ? parseInt(rawFilters.page, 10) : null;
+			const limit = rawFilters.limit ? parseInt(rawFilters.limit, 10) : null;
+
+			if (page && limit) {
+				const result = await orderRepository.getOrdersWithPagination(page, limit, filters);
+				return res.json(result);
+			}
+
+			const items = await orderRepository.findAll(filters);
+			return res.json(items.map(item => Order.fromDatabase(item)));
+		} catch (error) {
+			logger.error('filterOrders failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	/**
+	 * Place a market order with automatic price fetching
+	 * Body: accountId, instrumentId, side ('buy'|'sell'), lotSize, slPrice?, tpPrice?
+	 */
+	static async placeMarketOrder(req, res) {
+		try {
+			const { accountId, instrumentId, side, lotSize, sl = null, tp = null } = req.body || {};
+			if (!accountId || !instrumentId || !side || !lotSize) {
+				return res.status(400).json({ error: 'accountId, instrumentId, side, lotSize are required' });
+			}
+
+			// Validate side
+			if (side !== 'buy' && side !== 'sell') {
+				return res.status(400).json({ error: 'side must be either "buy" or "sell"' });
+			}
+
+			// Get current price
+			let currentPrice;
+			try {
+				logger.info(`Fetching current price for market order - instrumentId: ${instrumentId}`);
+				currentPrice = await PriceService.getCurrentPrice(instrumentId);
+				logger.info(`Current price fetched: ${currentPrice}`);
+			} catch (error) {
+				logger.error('Failed to fetch current price for market order:', error);
+				return res.status(400).json({ 
+					error: `Failed to fetch current price for market order: ${error.message}` 
+				});
+			}
+
+			// Create order data
+			const orderType = side === 'buy' ? OrderType.MARKET_BUY : OrderType.MARKET_SELL;
+			const orderData = {
+				account_id: accountId,
+				instrument_id: instrumentId,
+				order_type: orderType,
+				lot_size: lotSize,
+				status: OrderStatus.PENDING,
+				price: currentPrice,
+				sl_price: sl,
+				tp_price: tp
+			};
+
+			// 1) Place pending market order
+			const placedOrder = await orderRepository.placeOrder(orderData);
+
+			// 2) Fill order at current price
+			const filledOrder = await orderRepository.fillOrder(placedOrder.id, currentPrice);
+
+			// 3) Create trade
+			const trade = await tradeRepository.createTrade({
+				orderId: filledOrder.id,
+				accountId: accountId,
+				symbolId: instrumentId,
+				side: side,
+				quantity: lotSize,
+				price: currentPrice,
+				fee: null
+			});
+
+			// 4) Create position
+			const positionType = side === 'buy' ? PositionType.BUY : PositionType.SELL;
+			const position = await positionRepository.createPosition({
+				accountId: accountId,
+				instrumentId: instrumentId,
+				positionType: positionType,
+				lotSize: lotSize,
+				entryPrice: currentPrice,
+				slPrice: sl,
+				tpPrice: tp,
+				marginUsed: 0
+			});
+
+			return res.status(201).json({ 
+				order: filledOrder, 
+				trade, 
+				position,
+				executedPrice: currentPrice,
+				message: `Market ${side} order executed at ${currentPrice}`
+			});
+		} catch (error) {
+			logger.error('placeMarketOrder failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	/**
+	 * Get current price for an instrument
+	 * Query: instrumentId
+	 */
+	static async getCurrentPrice(req, res) {
+		try {
+			const { instrumentId } = req.params;
+			if (!instrumentId) {
+				return res.status(400).json({ error: 'instrumentId is required' });
+			}
+
+			const price = await PriceService.getCurrentPrice(parseInt(instrumentId, 10));
+			return res.json({ 
+				instrumentId: parseInt(instrumentId, 10), 
+				currentPrice: price,
+				timestamp: new Date().toISOString()
+			});
+		} catch (error) {
+			logger.error('getCurrentPrice failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+}
+
+export default OrderController;
+
+

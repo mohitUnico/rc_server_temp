@@ -31,12 +31,18 @@ import candlestickRouter from './http/candlestick.js';
 import quoteRouter from './http/quote.js';
 import symbolsRouter from './http/symbols.js';
 import tradingCredentialsRouter from './http/tradingCredentials.js';
+import ordersRouter from './http/orders.js';
+import positionsRouter from './http/positions.js';
+import tradesRouter from './http/trades.js';
 
 // Apply routes to app
 app.use('/http', candlestickRouter);
 app.use('/http', quoteRouter);
 app.use('/http', symbolsRouter);
 app.use('/http', tradingCredentialsRouter);
+app.use('/http', ordersRouter);
+app.use('/http', positionsRouter);
+app.use('/http', tradesRouter);
 
 // Graceful shutdown handling
 let isShuttingDown = false;

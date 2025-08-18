@@ -15,34 +15,38 @@ export class WebSocketManager {
     async connect() {
         return new Promise((resolve, reject) => {
             try {
+                this.logger.info(`Attempting to connect to ${this.assetType} WebSocket at ${this.config.url}`);
                 this.socket = new WebSocket(this.config.url, {
                     headers: { token: this.config.authToken }
                 });
 
                 this.socket.on('open', () => {
                     this.isReady = true;
-                    this.logger.info(`Connected to ${this.assetType} WebSocket`);
+                    this.logger.info(`Successfully connected to ${this.assetType} WebSocket`);
+                    this.logger.info(`WebSocket readyState: ${this.socket.readyState} (OPEN)`);
                     startPing(this.socket);
                     resolve();
                 });
 
                 this.socket.on('message', (data) => {
+                    this.logger.debug(`Received message from ${this.assetType} WebSocket`);
                     this.handleMessage(data);
                 });
 
-                this.socket.on('close', () => {
+                this.socket.on('close', (code, reason) => {
                     this.isReady = false;
-                    this.logger.warn(`${this.assetType} WebSocket closed. Reconnecting...`);
+                    this.logger.warn(`${this.assetType} WebSocket closed. Code: ${code}, Reason: ${reason || 'No reason provided'}`);
+                    this.logger.info(`Attempting to reconnect to ${this.assetType} WebSocket in 5 seconds...`);
                     setTimeout(() => this.connect(), 5000);
                 });
 
                 this.socket.on('error', (error) => {
-                    this.logger.error(`${this.assetType} WebSocket error:`, error);
+                    this.logger.error(`${this.assetType} WebSocket connection error:`, error);
                     reject(error);
                 });
 
             } catch (error) {
-                this.logger.error(`Failed to connect to ${this.assetType}:`, error);
+                this.logger.error(`Failed to create WebSocket connection to ${this.assetType}:`, error);
                 reject(error);
             }
         });
@@ -50,10 +54,13 @@ export class WebSocketManager {
 
     async disconnect() {
         if (this.socket) {
+            this.logger.info(`Initiating disconnect from ${this.assetType} WebSocket`);
             stopPing();
             this.socket.close();
             this.isReady = false;
-            this.logger.info(`Disconnected from ${this.assetType} WebSocket`);
+            this.logger.info(`Successfully disconnected from ${this.assetType} WebSocket`);
+        } else {
+            this.logger.warn(`Attempted to disconnect from ${this.assetType} WebSocket, but no connection exists`);
         }
     }
 
@@ -65,7 +72,9 @@ export class WebSocketManager {
                 types: 'quote'
             };
             this.socket.send(JSON.stringify(message));
-            this.logger.info(`Subscribed to ${symbol} on ${this.assetType}`);
+            this.logger.info(`Subscribed to ${symbol} on ${this.assetType} WebSocket`);
+        } else {
+            this.logger.warn(`Cannot subscribe to ${symbol} on ${this.assetType}: WebSocket not connected`);
         }
     }
 
@@ -77,12 +86,28 @@ export class WebSocketManager {
                 types: 'quote'
             };
             this.socket.send(JSON.stringify(message));
-            this.logger.info(`Unsubscribed from ${symbol} on ${this.assetType}`);
+            this.logger.info(`Unsubscribed from ${symbol} on ${this.assetType} WebSocket`);
+        } else {
+            this.logger.warn(`Cannot unsubscribe from ${symbol} on ${this.assetType}: WebSocket not connected`);
         }
     }
 
     isConnected() {
-        return this.socket && this.socket.readyState === WebSocket.OPEN;
+        const connected = this.socket && this.socket.readyState === WebSocket.OPEN;
+        if (!connected) {
+            this.logger.debug(`${this.assetType} WebSocket connection status: ${this.socket ? this.getReadyStateString(this.socket.readyState) : 'No socket instance'}`);
+        }
+        return connected;
+    }
+
+    getReadyStateString(readyState) {
+        switch (readyState) {
+            case WebSocket.CONNECTING: return 'CONNECTING';
+            case WebSocket.OPEN: return 'OPEN';
+            case WebSocket.CLOSING: return 'CLOSING';
+            case WebSocket.CLOSED: return 'CLOSED';
+            default: return 'UNKNOWN';
+        }
     }
 
     handleMessage(data) {
