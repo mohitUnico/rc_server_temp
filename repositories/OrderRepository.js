@@ -117,7 +117,7 @@ class OrderRepository extends BaseRepository {
    * Find pending orders (matching Flutter getPendingOrders)
    */
   async findPendingOrders(accountId = null, options = {}) {
-    return this.findOrdersByStatus(OrderStatus.PENDING, accountId, options);
+    return this.findOrdersByStatus(OrderStatus.PLACED, accountId, options);
   }
 
   /**

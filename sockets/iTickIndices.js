@@ -3,6 +3,7 @@ import { WebSocketManager } from '../websocket/WebSocketManager.js';
 import { WebSocketConfig } from '../config/websocket.js';
 import { PriceUpdateService } from '../services/priceUpdateService.js';
 import { getClientsForSymbol, removeClientFromSymbol } from '../utils/subscriptionManager.js';
+import priceCacheService from '../services/priceCacheService.js';
 
 let indicesManager = null;
 
@@ -18,6 +19,9 @@ export async function connectToIndices() {
                 const lastPrice = message.data?.ld;       // Last price (e.g., 4500.00)
 
                 if (symbol && lastPrice !== undefined) {
+                    // Update price cache for trading monitor services
+                    priceCacheService.updatePrice(assetType, symbol, lastPrice, message.data);
+                    
                     // Check if symbol is tracked and update database if needed
                     const updateResult = await PriceUpdateService.updatePrice(symbol, lastPrice, assetType);
                 }

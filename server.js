@@ -8,6 +8,9 @@ import { connectToCrypto } from './sockets/iTickCrypto.js';
 import { connectToIndices } from './sockets/iTickIndices.js';
 import { DatabaseService } from './services/databaseService.js';
 import { Logger } from './utils/logger.js';
+import positionCheckService from './services/positionCheckService.js';
+import pendingOrderService from './services/pendingOrderService.js';
+import priceCacheService from './services/priceCacheService.js';
 
 const app = express();
 const server = createServer(app);
@@ -52,6 +55,17 @@ async function gracefulShutdown(signal) {
     isShuttingDown = true;
 
     logger.info(`🔄 Received ${signal}, starting graceful shutdown...`);
+
+    // Stop trading monitor services
+    try {
+        positionCheckService.stop();
+        logger.info('✅ Position check service stopped');
+        
+        pendingOrderService.stop();
+        logger.info('✅ Pending order service stopped');
+    } catch (error) {
+        logger.error('❌ Error stopping trading monitor services:', error);
+    }
 
     // Close HTTP server
     server.close(() => {
@@ -112,6 +126,25 @@ async function startServer() {
             logger.info(`🚀 Server running on port ${PORT}`);
             logger.info('🎯 Architecture: Client Subscribe → iTick Data → Check Tracking → Update DB if Tracked → Send to Clients');
             logger.info('📧 New Feature: Trading Credentials Email Service Available');
+            
+            // Start trading monitor services
+            try {
+                positionCheckService.start();
+                logger.info('✅ Position check service started');
+                
+                pendingOrderService.start();
+                logger.info('✅ Pending order service started');
+                
+                // Start price cache cleanup interval (every 30 seconds)
+                setInterval(() => {
+                    priceCacheService.clearStalePrices();
+                }, 30000);
+                logger.info('✅ Price cache cleanup interval started');
+                
+                logger.info('🎯 Trading monitor services: Position & Order monitoring active (using WebSocket prices)');
+            } catch (error) {
+                logger.error('❌ Failed to start trading monitor services:', error);
+            }
         });
 
     } catch (error) {
