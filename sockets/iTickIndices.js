@@ -2,7 +2,7 @@ import WebSocket from 'ws';
 import { WebSocketManager } from '../websocket/WebSocketManager.js';
 import { WebSocketConfig } from '../config/websocket.js';
 import { PriceUpdateService } from '../services/priceUpdateService.js';
-import { getClientsForSymbol, removeClientFromSymbol } from '../utils/subscriptionManager.js';
+import { getClientsForSymbol } from '../utils/subscriptionManager.js';
 
 let indicesManager = null;
 
