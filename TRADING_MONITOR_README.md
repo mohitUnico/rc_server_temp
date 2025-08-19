@@ -4,11 +4,12 @@ This document describes the trading monitor services that automatically manage p
 
 ## Overview
 
-The trading monitor system consists of three main components:
+The trading monitor system consists of four main components:
 
 1. **PositionCheckService** - Monitors open positions and automatically closes them when SL/TP levels are hit
 2. **PendingOrderService** - Monitors pending orders and automatically fills them when limit prices are met
 3. **PriceCacheService** - In-memory cache that stores real-time prices from WebSocket data
+4. **AccountMetricsService** - Calculates and updates trading account metrics (equity, margin, free margin) based on open positions
 
 ## Services
 
@@ -128,6 +129,40 @@ const price = await priceCacheService.getCurrentPriceByInstrumentId(
 const stats = priceCacheService.getCacheStats();
 ```
 
+### AccountMetricsService
+
+Calculates and updates trading account metrics based on open positions and current market prices.
+
+**Key Features:**
+
+- Real-time equity calculation (balance + unrealized P&L)
+- Margin calculation based on open positions
+- Free margin calculation (equity - margin)
+- Margin level percentage calculation
+- Automatic updates every 1 second
+- Margin sufficiency checking for new positions
+- Support for all active trading accounts
+
+**Usage:**
+
+````javascript
+import accountMetricsService from "./services/accountMetricsService.js";
+
+// Start the service (automatically updates all accounts)
+accountMetricsService.start();
+
+// Get metrics summary for specific account
+const summary = await accountMetricsService.getAccountMetricsSummary(accountUid);
+
+// Check if account has sufficient margin for new position
+const marginCheck = await accountMetricsService.checkMarginSufficiency(accountUid, requiredMargin);
+
+// Get metrics for all accounts
+const allMetrics = await accountMetricsService.getAllAccountsMetrics();
+
+// Manually trigger update for specific account
+await accountMetricsService.triggerUpdateForAccount(accountUid);
+
 ## Integration with Server
 
 The services are now integrated directly into `server.js`. They will automatically start when the server starts and stop during graceful shutdown.
@@ -136,6 +171,7 @@ The services are now integrated directly into `server.js`. They will automatical
 // In server.js - services are imported and started automatically
 import positionCheckService from "./services/positionCheckService.js";
 import pendingOrderService from "./services/pendingOrderService.js";
+import accountMetricsService from "./services/accountMetricsService.js";
 
 // Services start automatically when server starts
 server.listen(PORT, () => {
@@ -149,9 +185,13 @@ server.listen(PORT, () => {
     pendingOrderService.start();
     logger.info("✅ Pending order service started");
 
+    accountMetricsService.start();
+    logger.info("✅ Account metrics service started");
+
     logger.info(
       "🎯 Trading monitor services: Position & Order monitoring active"
     );
+    logger.info("📊 Account metrics service: Real-time equity, margin, and free margin updates active");
   } catch (error) {
     logger.error("❌ Failed to start trading monitor services:", error);
   }
@@ -168,13 +208,16 @@ async function gracefulShutdown(signal) {
 
     pendingOrderService.stop();
     logger.info("✅ Pending order service stopped");
+
+    accountMetricsService.stop();
+    logger.info("✅ Account metrics service stopped");
   } catch (error) {
     logger.error("❌ Error stopping trading monitor services:", error);
   }
 
   // ... rest of shutdown code ...
 }
-```
+````
 
 ## Testing
 
@@ -192,6 +235,9 @@ node scripts/testTradingMonitor.js intervals
 
 # Test price cache service
 node scripts/testPriceCache.js
+
+# Test account metrics service
+node scripts/testAccountMetrics.js
 
 # Run all tests
 node scripts/testTradingMonitor.js all

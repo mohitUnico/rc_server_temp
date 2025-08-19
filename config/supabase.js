@@ -18,8 +18,8 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 export async function testConnection() {
     try {
         const { data, error } = await supabase
-            .from('symbols')
-            .select('count')
+            .from('orders')
+            .select('id')
             .limit(1);
 
         if (error) {

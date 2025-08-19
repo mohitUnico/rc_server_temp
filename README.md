@@ -86,31 +86,34 @@ A robust Node.js server that acts as a real-time financial data gateway for Flut
 
 ### 🎯 Core Features
 
-| Feature | Description | Status |
-|---------|-------------|---------|
-| **Real-time Data Streaming** | WebSocket-based live financial data | ✅ Active |
-| **Multi-Asset Support** | Forex, Crypto, Indices data streams | ✅ Active |
-| **Subscription Management** | Per-client, per-symbol subscriptions | ✅ Active |
-| **Database Integration** | Supabase PostgreSQL integration | ✅ Active |
-| **Price Tracking** | Automatic price updates for tracked symbols | ✅ Active |
-| **Email Service** | Trading credentials delivery | ✅ Active |
-| **HTTP API** | RESTful endpoints for data access | ✅ Active |
+| Feature                      | Description                                 | Status    |
+| ---------------------------- | ------------------------------------------- | --------- |
+| **Real-time Data Streaming** | WebSocket-based live financial data         | ✅ Active |
+| **Multi-Asset Support**      | Forex, Crypto, Indices data streams         | ✅ Active |
+| **Subscription Management**  | Per-client, per-symbol subscriptions        | ✅ Active |
+| **Database Integration**     | Supabase PostgreSQL integration             | ✅ Active |
+| **Price Tracking**           | Automatic price updates for tracked symbols | ✅ Active |
+| **Email Service**            | Trading credentials delivery                | ✅ Active |
+| **HTTP API**                 | RESTful endpoints for data access           | ✅ Active |
 
 ### 📊 Feature Implementation Details
 
 #### 1. Real-time Data Streaming
+
 - **Protocol:** WebSocket (ws://)
 - **Data Format:** JSON with real-time price updates
 - **Frequency:** Continuous streaming from iTick API
 - **Latency:** Sub-second updates
 
 #### 2. Subscription Management
+
 - **Architecture:** Map<symbol, Set<client>> structure
 - **Efficiency:** First/Last client logic for API optimization
 - **Scalability:** Independent client subscriptions
 - **Isolation:** Clients receive only subscribed data
 
 #### 3. Database Integration
+
 - **Database:** Supabase (PostgreSQL)
 - **Table:** `symbols` with composite primary key
 - **Operations:** CRUD for symbol management
@@ -136,7 +139,7 @@ rc_server_temp1/
 ├── 📁 services/                  # Business services
 │   ├── databaseService.js       # Database operations
 │   ├── emailService.js          # Email functionality
-│   ├── priceUpdateService.js    # Price updates
+│   ├── [removed] priceUpdateService.js    # (Removed)
 │   └── symbolManagementService.js # Symbol CRUD
 ├── 📁 sockets/                   # WebSocket handlers
 │   ├── flutterClient.js         # Flutter client handler
@@ -231,13 +234,13 @@ CREATE INDEX idx_symbols_updated ON symbols(last_updated);
 
 ### Symbol Configuration
 
-The system uses a hardcoded list of tracked symbols in `config/symbols.js`:
+The previous hardcoded list and symbols table have been removed.
 
 ```javascript
 export const TRACKED_SYMBOLS = {
-    forex: ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD'],
-    crypto: ['BTCUSD', 'ETHUSD', 'ADAUSD', 'DOTUSD', 'LINKUSD'],
-    indices: ['SPX500', 'NAS100', 'US30', 'GER30', 'UK100']
+  forex: ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD"],
+  crypto: ["BTCUSD", "ETHUSD", "ADAUSD", "DOTUSD", "LINKUSD"],
+  indices: ["SPX500", "NAS100", "US30", "GER30", "UK100"],
 };
 ```
 
@@ -246,11 +249,13 @@ export const TRACKED_SYMBOLS = {
 ### HTTP API Endpoints
 
 #### 1. Candlestick Data
+
 ```http
 GET /http/candlestick?type=forex&code=EURUSD&kType=1&et=1754906064962&limit=10
 ```
 
 **Parameters:**
+
 - `type`: Asset type (forex, crypto, indices)
 - `code`: Symbol code
 - `kType`: K-line type
@@ -258,6 +263,7 @@ GET /http/candlestick?type=forex&code=EURUSD&kType=1&et=1754906064962&limit=10
 - `limit`: Number of candles
 
 **Response:**
+
 ```json
 {
   "code": 0,
@@ -277,15 +283,18 @@ GET /http/candlestick?type=forex&code=EURUSD&kType=1&et=1754906064962&limit=10
 ```
 
 #### 2. Real-time Quotes
+
 ```http
 GET /http/quote?type=forex&symbol=EURUSD
 ```
 
 **Parameters:**
+
 - `type`: Asset type (forex, crypto, indices)
 - `symbol`: Symbol name
 
 **Response:**
+
 ```json
 {
   "code": 0,
@@ -305,6 +314,7 @@ GET /http/quote?type=forex&symbol=EURUSD
 ```
 
 #### 3. Symbol Management
+
 ```http
 # Get all tracked symbols
 GET /http/tracked
@@ -330,6 +340,7 @@ DELETE /http/tracked/EURUSD/forex
 ```
 
 #### 4. Email Service
+
 ```http
 # Send trading credentials
 POST /http/trading-credentials
@@ -346,23 +357,28 @@ GET /http/trading-credentials/status
 ### WebSocket Endpoints
 
 #### Flutter Client Connection
+
 ```javascript
 // Connect to WebSocket
-const ws = new WebSocket('ws://localhost:3000');
+const ws = new WebSocket("ws://localhost:3000");
 
 // Subscribe to symbols
-ws.send(JSON.stringify({
-  action: 'subscribe',
-  assetType: 'forex',
-  symbols: 'EURUSD,GBPUSD'
-}));
+ws.send(
+  JSON.stringify({
+    action: "subscribe",
+    assetType: "forex",
+    symbols: "EURUSD,GBPUSD",
+  })
+);
 
 // Unsubscribe from symbols
-ws.send(JSON.stringify({
-  action: 'unsubscribe',
-  assetType: 'forex',
-  symbols: 'EURUSD'
-}));
+ws.send(
+  JSON.stringify({
+    action: "unsubscribe",
+    assetType: "forex",
+    symbols: "EURUSD",
+  })
+);
 ```
 
 ## 📡 WebSocket Communication
@@ -395,6 +411,7 @@ ws.send(JSON.stringify({
 ### Message Format
 
 #### Subscribe Message
+
 ```json
 {
   "action": "subscribe",
@@ -404,6 +421,7 @@ ws.send(JSON.stringify({
 ```
 
 #### Unsubscribe Message
+
 ```json
 {
   "action": "unsubscribe",
@@ -413,6 +431,7 @@ ws.send(JSON.stringify({
 ```
 
 #### Data Message (from iTick)
+
 ```json
 {
   "code": 1,
@@ -536,14 +555,14 @@ ws.send(JSON.stringify({
 
 ### Security Measures
 
-| Security Feature | Description | Implementation |
-|------------------|-------------|----------------|
-| **Environment Variables** | Sensitive data stored in .env | ✅ Active |
-| **API Key Protection** | iTick tokens secured | ✅ Active |
-| **Database Security** | Supabase RLS policies | ✅ Active |
-| **Input Validation** | Request data sanitization | ✅ Active |
-| **Email Security** | Gmail App Password auth | ✅ Active |
-| **HTTPS/WSS** | Secure communication | ✅ Active |
+| Security Feature          | Description                   | Implementation |
+| ------------------------- | ----------------------------- | -------------- |
+| **Environment Variables** | Sensitive data stored in .env | ✅ Active      |
+| **API Key Protection**    | iTick tokens secured          | ✅ Active      |
+| **Database Security**     | Supabase RLS policies         | ✅ Active      |
+| **Input Validation**      | Request data sanitization     | ✅ Active      |
+| **Email Security**        | Gmail App Password auth       | ✅ Active      |
+| **HTTPS/WSS**             | Secure communication          | ✅ Active      |
 
 ### Authentication Flow
 
@@ -564,32 +583,38 @@ ws.send(JSON.stringify({
 ### Test Scripts
 
 #### 1. Email Service Testing
+
 ```bash
 npm run test-email
 ```
 
 **Tests:**
+
 - Email service status
 - Connection verification
 - Test email sending
 
 #### 2. System Setup Testing
+
 ```bash
 npm run test-setup
 ```
 
 **Tests:**
+
 - Database connection
 - Symbol management
 - Price updates
 - Data retrieval
 
 #### 3. Symbol Management
+
 ```bash
 npm run manage-symbols
 ```
 
 **Features:**
+
 - Add symbols
 - Remove symbols
 - List symbols
@@ -598,28 +623,32 @@ npm run manage-symbols
 ### Manual Testing
 
 #### WebSocket Testing
+
 ```javascript
 // Test WebSocket connection
-const ws = new WebSocket('ws://localhost:3000');
+const ws = new WebSocket("ws://localhost:3000");
 
 ws.onopen = () => {
-    console.log('Connected to server');
-    
-    // Subscribe to symbols
-    ws.send(JSON.stringify({
-        action: 'subscribe',
-        assetType: 'forex',
-        symbols: 'EURUSD'
-    }));
+  console.log("Connected to server");
+
+  // Subscribe to symbols
+  ws.send(
+    JSON.stringify({
+      action: "subscribe",
+      assetType: "forex",
+      symbols: "EURUSD",
+    })
+  );
 };
 
 ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    console.log('Received:', data);
+  const data = JSON.parse(event.data);
+  console.log("Received:", data);
 };
 ```
 
 #### HTTP API Testing
+
 ```bash
 # Test candlestick endpoint
 curl "http://localhost:3000/http/candlestick?type=forex&code=EURUSD&kType=1&et=1754906064962&limit=1"
@@ -638,6 +667,7 @@ curl -X POST http://localhost:3000/http/trading-credentials \
 ### Deployment Options
 
 #### 1. AWS EC2 Deployment
+
 ```bash
 # Connect to EC2 instance
 ssh -i your-key.pem ubuntu@your-ec2-ip
@@ -658,6 +688,7 @@ npm start
 ```
 
 #### 2. Docker Deployment
+
 ```dockerfile
 FROM node:18-alpine
 
@@ -674,6 +705,7 @@ CMD ["npm", "start"]
 ```
 
 #### 3. PM2 Process Management
+
 ```bash
 # Install PM2
 npm install -g pm2
@@ -691,6 +723,7 @@ pm2 logs financial-gateway
 ### Environment Setup
 
 #### Production Environment Variables
+
 ```bash
 # Production database
 SUPABASE_URL=https://your-project.supabase.co
@@ -722,32 +755,34 @@ LOGO_PATH=./assets/raz_caps_logo.png
 
 ### Log Levels
 
-| Level | Description | Usage |
-|-------|-------------|-------|
-| **ERROR** | Critical errors | System failures, crashes |
-| **WARN** | Warning messages | Deprecated features, issues |
-| **INFO** | General information | Startup, connections, operations |
-| **DEBUG** | Detailed debugging | Development, troubleshooting |
+| Level     | Description         | Usage                            |
+| --------- | ------------------- | -------------------------------- |
+| **ERROR** | Critical errors     | System failures, crashes         |
+| **WARN**  | Warning messages    | Deprecated features, issues      |
+| **INFO**  | General information | Startup, connections, operations |
+| **DEBUG** | Detailed debugging  | Development, troubleshooting     |
 
 ### Monitoring Metrics
 
 #### Key Performance Indicators (KPIs)
 
-| Metric | Description | Target |
-|--------|-------------|---------|
-| **Response Time** | API endpoint response time | < 100ms |
-| **WebSocket Latency** | Real-time data delay | < 500ms |
-| **Database Query Time** | Database operation speed | < 50ms |
-| **Memory Usage** | Server memory consumption | < 512MB |
-| **CPU Usage** | Server CPU utilization | < 70% |
-| **Connection Count** | Active WebSocket connections | < 1000 |
+| Metric                  | Description                  | Target  |
+| ----------------------- | ---------------------------- | ------- |
+| **Response Time**       | API endpoint response time   | < 100ms |
+| **WebSocket Latency**   | Real-time data delay         | < 500ms |
+| **Database Query Time** | Database operation speed     | < 50ms  |
+| **Memory Usage**        | Server memory consumption    | < 512MB |
+| **CPU Usage**           | Server CPU utilization       | < 70%   |
+| **Connection Count**    | Active WebSocket connections | < 1000  |
 
 #### Health Check Endpoint
+
 ```http
 GET /health
 ```
 
 **Response:**
+
 ```json
 {
   "status": "OK",
@@ -769,6 +804,7 @@ GET /health
 #### 1. WebSocket Connection Issues
 
 **Problem:** Clients can't connect to WebSocket
+
 ```bash
 # Check server status
 curl http://localhost:3000/health
@@ -785,6 +821,7 @@ sudo ufw status
 #### 2. Database Connection Issues
 
 **Problem:** Supabase connection fails
+
 ```bash
 # Test database connection
 npm run test-setup
@@ -799,6 +836,7 @@ echo $SUPABASE_ANON_KEY
 #### 3. Email Service Issues
 
 **Problem:** Emails not sending
+
 ```bash
 # Test email service
 npm run test-email
@@ -813,6 +851,7 @@ npm run test-email
 #### 4. High Memory Usage
 
 **Problem:** Server consuming too much memory
+
 ```bash
 # Check memory usage
 ps aux | grep node
@@ -829,6 +868,7 @@ pm2 restart financial-gateway
 ### Performance Optimization
 
 #### 1. Database Optimization
+
 ```sql
 -- Add indexes for frequently queried columns
 CREATE INDEX idx_symbols_name_type ON symbols(symbol_name, symbol_type);
@@ -839,6 +879,7 @@ SELECT * FROM symbols WHERE symbol_type = 'forex' AND last_updated > NOW() - INT
 ```
 
 #### 2. WebSocket Optimization
+
 ```javascript
 // Implement connection pooling
 const maxConnections = 1000;
@@ -846,28 +887,29 @@ const connectionPool = new Map();
 
 // Implement rate limiting
 const rateLimit = {
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100 // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
 };
 ```
 
 #### 3. Memory Management
+
 ```javascript
 // Implement garbage collection
 setInterval(() => {
-    if (global.gc) {
-        global.gc();
-    }
+  if (global.gc) {
+    global.gc();
+  }
 }, 30000); // Every 30 seconds
 
 // Monitor memory usage
 setInterval(() => {
-    const memUsage = process.memoryUsage();
-    console.log('Memory Usage:', {
-        rss: Math.round(memUsage.rss / 1024 / 1024) + ' MB',
-        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024) + ' MB',
-        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + ' MB'
-    });
+  const memUsage = process.memoryUsage();
+  console.log("Memory Usage:", {
+    rss: Math.round(memUsage.rss / 1024 / 1024) + " MB",
+    heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024) + " MB",
+    heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + " MB",
+  });
 }, 60000); // Every minute
 ```
 
@@ -875,22 +917,22 @@ setInterval(() => {
 
 ### Planned Features
 
-| Feature | Priority | Timeline | Description |
-|---------|----------|----------|-------------|
-| **Rate Limiting** | High | Q1 2025 | API rate limiting and throttling |
-| **User Authentication** | Medium | Q2 2025 | JWT-based user authentication |
-| **Data Analytics** | Medium | Q2 2025 | Trading data analytics and insights |
-| **Mobile App** | Low | Q3 2025 | Native mobile application |
-| **Advanced Charts** | Low | Q4 2025 | Interactive charting capabilities |
+| Feature                 | Priority | Timeline | Description                         |
+| ----------------------- | -------- | -------- | ----------------------------------- |
+| **Rate Limiting**       | High     | Q1 2025  | API rate limiting and throttling    |
+| **User Authentication** | Medium   | Q2 2025  | JWT-based user authentication       |
+| **Data Analytics**      | Medium   | Q2 2025  | Trading data analytics and insights |
+| **Mobile App**          | Low      | Q3 2025  | Native mobile application           |
+| **Advanced Charts**     | Low      | Q4 2025  | Interactive charting capabilities   |
 
 ### Technical Improvements
 
-| Improvement | Priority | Description |
-|-------------|----------|-------------|
-| **Redis Caching** | High | Implement Redis for data caching |
-| **Load Balancing** | Medium | Add load balancer for scalability |
-| **Microservices** | Low | Break down into microservices |
-| **GraphQL API** | Low | Add GraphQL endpoint |
+| Improvement        | Priority | Description                       |
+| ------------------ | -------- | --------------------------------- |
+| **Redis Caching**  | High     | Implement Redis for data caching  |
+| **Load Balancing** | Medium   | Add load balancer for scalability |
+| **Microservices**  | Low      | Break down into microservices     |
+| **GraphQL API**    | Low      | Add GraphQL endpoint              |
 
 ## 🤝 Contributing
 
@@ -944,4 +986,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Built with ❤️ by Your Company Team**
 
-*Last updated: January 2025* 
+_Last updated: January 2025_

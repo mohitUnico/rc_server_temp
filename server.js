@@ -11,6 +11,7 @@ import { Logger } from './utils/logger.js';
 import positionCheckService from './services/positionCheckService.js';
 import pendingOrderService from './services/pendingOrderService.js';
 import priceCacheService from './services/priceCacheService.js';
+import accountMetricsService from './services/accountMetricsService.js';
 
 const app = express();
 const server = createServer(app);
@@ -32,7 +33,6 @@ app.get('/health', (req, res) => {
 // Import HTTP routes
 import candlestickRouter from './http/candlestick.js';
 import quoteRouter from './http/quote.js';
-import symbolsRouter from './http/symbols.js';
 import tradingCredentialsRouter from './http/tradingCredentials.js';
 import ordersRouter from './http/orders.js';
 import positionsRouter from './http/positions.js';
@@ -41,7 +41,6 @@ import tradesRouter from './http/trades.js';
 // Apply routes to app
 app.use('/http', candlestickRouter);
 app.use('/http', quoteRouter);
-app.use('/http', symbolsRouter);
 app.use('/http', tradingCredentialsRouter);
 app.use('/http', ordersRouter);
 app.use('/http', positionsRouter);
@@ -63,6 +62,9 @@ async function gracefulShutdown(signal) {
         
         pendingOrderService.stop();
         logger.info('✅ Pending order service stopped');
+        
+        accountMetricsService.stop();
+        logger.info('✅ Account metrics service stopped');
     } catch (error) {
         logger.error('❌ Error stopping trading monitor services:', error);
     }
@@ -135,6 +137,9 @@ async function startServer() {
                 pendingOrderService.start();
                 logger.info('✅ Pending order service started');
                 
+                accountMetricsService.start();
+                logger.info('✅ Account metrics service started');
+                
                 // Start price cache cleanup interval (every 30 seconds)
                 setInterval(() => {
                     priceCacheService.clearStalePrices();
@@ -142,6 +147,7 @@ async function startServer() {
                 logger.info('✅ Price cache cleanup interval started');
                 
                 logger.info('🎯 Trading monitor services: Position & Order monitoring active (using WebSocket prices)');
+                logger.info('📊 Account metrics service: Real-time equity, margin, and free margin updates active');
             } catch (error) {
                 logger.error('❌ Failed to start trading monitor services:', error);
             }

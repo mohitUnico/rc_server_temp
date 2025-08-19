@@ -6,7 +6,7 @@ export class DatabaseService {
             console.log('🔧 Checking database connection...');
 
             const { data, error } = await supabase
-                .from('symbols') // Use the existing symbols table
+                .from('orders')
                 .select('*')
                 .limit(1);
 
@@ -16,7 +16,7 @@ export class DatabaseService {
             }
 
             console.log('✅ Database connection successful');
-            console.log('ℹ️ Using existing symbols table structure');
+            console.log('ℹ️ Verified orders table access');
 
         } catch (err) {
             console.error('❌ Database initialization failed:', err);
@@ -27,7 +27,7 @@ export class DatabaseService {
     static async getTableInfo() {
         try {
             const { data, error } = await supabase
-                .from('symbols') // Use the existing symbols table
+                .from('orders')
                 .select('*')
                 .limit(1);
 

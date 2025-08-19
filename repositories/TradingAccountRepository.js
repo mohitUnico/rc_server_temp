@@ -357,7 +357,7 @@ class TradingAccountRepository extends BaseRepository {
    */
   async findTradingAccountsByStatus(status, options = {}) {
     try {
-      const filters = { account_status: status };
+      const filters = { status: status };
       const result = await this.findAll(filters, options);
       return result.map(account => TradingAccount.fromDatabase(account));
     } catch (error) {
@@ -421,8 +421,7 @@ class TradingAccountRepository extends BaseRepository {
   async updateAccountEquity(accountUid, newEquity) {
     try {
       const updateData = { 
-        equity: newEquity,
-        updated_at: new Date()
+        equity: newEquity
       };
       
       const result = await this.updateByField('account_uid', accountUid, updateData);
@@ -440,8 +439,7 @@ class TradingAccountRepository extends BaseRepository {
     try {
       const updateData = { 
         margin: newMargin,
-        free_margin: newFreeMargin,
-        updated_at: new Date()
+        free_margin: newFreeMargin
       };
       
       const result = await this.updateByField('account_uid', accountUid, updateData);
@@ -458,8 +456,7 @@ class TradingAccountRepository extends BaseRepository {
   async updateAccountStatus(accountUid, status) {
     try {
       const updateData = { 
-        account_status: status,
-        updated_at: new Date()
+        status: status
       };
       
       const result = await this.updateByField('account_uid', accountUid, updateData);
@@ -505,7 +502,6 @@ class TradingAccountRepository extends BaseRepository {
 
       const dbData = account.toDatabaseFormat();
       delete dbData.account_uid; // Remove UID from update data
-      dbData.updated_at = new Date();
       
       const result = await this.updateByField('account_uid', accountUid, dbData);
       return result ? TradingAccount.fromDatabase(result) : null;

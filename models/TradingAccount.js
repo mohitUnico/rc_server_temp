@@ -14,12 +14,12 @@ class TradingAccount {
     this.equity = data.equity || 0;
     this.margin = data.margin || 0;
     this.freeMargin = data.free_margin || 0;
-    this.marginLevel = data.margin_level || 0;
-    this.status = data.account_status || AccountStatus.ACTIVE;
+    // Note: margin_level is calculated on-the-fly, not stored in database
+    this.status = data.status || AccountStatus.ACTIVE;
     this.currency = data.currency || 'USD';
-    this.leverage = data.leverage || 100;
+    this.leverage = data.levarage || 100; // Note: database column is misspelled as 'levarage'
     this.createdAt = data.created_at || new Date();
-    this.updatedAt = data.updated_at || new Date();
+    // Note: updated_at column doesn't exist in database schema
   }
 
   /**
@@ -35,12 +35,12 @@ class TradingAccount {
       equity: this.equity,
       margin: this.margin,
       free_margin: this.freeMargin,
-      margin_level: this.marginLevel,
-      account_status: this.status,
+      // margin_level is calculated on-the-fly, not stored
+      status: this.status,
       currency: this.currency,
-      leverage: this.leverage,
+      levarage: this.leverage, // Note: database column is misspelled as 'levarage'
       created_at: this.createdAt,
-      updated_at: this.updatedAt
+      // updated_at column doesn't exist in database schema
     };
   }
 

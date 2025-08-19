@@ -1,7 +1,6 @@
 import WebSocket from 'ws';
 import { WebSocketManager } from '../websocket/WebSocketManager.js';
 import { WebSocketConfig } from '../config/websocket.js';
-import { PriceUpdateService } from '../services/priceUpdateService.js';
 import { getClientsForSymbol, removeClientFromSymbol } from '../utils/subscriptionManager.js';
 import priceCacheService from '../services/priceCacheService.js';
 
@@ -22,8 +21,7 @@ export async function connectToForex() {
                     // Update price cache for trading monitor services
                     priceCacheService.updatePrice(assetType, symbol, lastPrice, message.data);
                     
-                    // Check if symbol is tracked and update database if needed
-                    const updateResult = await PriceUpdateService.updatePrice(symbol, lastPrice, assetType);
+                    // No database symbol updates; only update in-memory cache and forward to clients
                 }
 
                 // Always get clients subscribed to this symbol (regardless of tracking status)
