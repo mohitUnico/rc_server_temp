@@ -987,3 +987,183 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Built with ❤️ by Your Company Team**
 
 _Last updated: January 2025_
+
+## 🔥 Trading automation services (new)
+
+This server now includes real-time trading automation powered by an in-memory price cache and three services that run on short intervals:
+
+- Pending order auto-fill
+- Position SL/TP auto-close
+- Account metrics updater
+
+These features do not write streaming prices to the database. Prices are cached in-memory and used by the automation services and the Orders API.
+
+### High-level architecture
+
+```mermaid
+graph TD
+  subgraph Data Sources
+    IT[iTick WebSocket Streams]
+  end
+
+  subgraph Socket Adapters
+    FX[forex adapter]
+    CR[crypto adapter]
+    IX[indices adapter]
+  end
+
+  subgraph Services
+    PC[PriceCacheService]
+    PO[PendingOrderService]
+    PS[PositionCheckService]
+    AM[AccountMetricsService]
+  end
+
+  subgraph HTTP Layer
+    OC[OrderController]
+    OR[Order Routes]
+  end
+
+  subgraph Persistence
+    DB[(Database via Repositories)]
+  end
+
+  IT --> FX --> PC
+  IT --> CR --> PC
+  IT --> IX --> PC
+
+  PC --> PO
+  PC --> PS
+  PC --> AM
+
+  OR --> OC
+  OC --> DB
+
+  PO --> DB
+  PS --> DB
+  AM --> DB
+
+  %% Clients
+  CL[Flutter/Web Clients] --- FX
+  CL --- CR
+  CL --- IX
+```
+
+### PriceCacheService
+
+- File: `services/priceCacheService.js`
+- Purpose: Keep the latest price per `assetType/symbol` in-memory for ultra-low-latency access by server-side services.
+- Data structure: `priceCache = { forex: Map(), crypto: Map(), indices: Map() }`
+- Key methods:
+  - `updatePrice(assetType, symbol, price, data)` — called by socket adapters on each tick
+  - `getCurrentPrice(assetType, symbol)` — returns the latest non-stale price
+  - `getCurrentPriceByInstrumentId(instrumentId)` — resolves symbol then returns current price
+  - `clearStalePrices()` — removes entries older than 10 seconds
+  - `getAllPricesAllTypes()` — diagnostics/observability
+
+Flow:
+1) Socket receives a tick from iTick
+2) Adapter calls `priceCacheService.updatePrice(...)`
+3) Services read from the cache on their own intervals
+
+### PendingOrderService
+
+- File: `services/pendingOrderService.js`
+- Purpose: Auto-fill pending orders when their limit/stop triggers are met by current market price.
+- Interval: 100ms
+- Repositories used: `OrderRepository`, `PositionRepository`
+- Logic:
+  - Find all pending orders: `orderRepository.findPendingOrders()`
+  - For each order:
+    - Get price via `priceCacheService.getCurrentPriceByInstrumentId(order.instrumentId)`
+    - Determine if limit/stop is met by `isLimitPriceMet(order, price)`
+    - If met: `fillOrder(order, price)` → persist fill, then `createPositionFromOrder(...)`
+
+Supported order types checked:
+- `BUY_LIMIT`, `SELL_LIMIT`, `BUY_STOP`, `SELL_STOP`, `BUY_STOP_LIMIT`, `SELL_STOP_LIMIT`
+
+### PositionCheckService
+
+- File: `services/positionCheckService.js`
+- Purpose: Auto-close open positions when SL/TP thresholds are met.
+- Interval: 100ms
+- Repository used: `PositionRepository`
+- Logic:
+  - Find open positions: `positionRepository.findOpenPositions()`
+  - For each position:
+    - Current price via `priceCacheService.getCurrentPriceByInstrumentId(position.instrumentId)`
+    - If SL hit → `closePosition(position, price, 'stop_loss')`
+    - Else if TP hit → `closePosition(position, price, 'take_profit')`
+
+### AccountMetricsService
+
+- File: `services/accountMetricsService.js`
+- Purpose: Periodically compute account metrics (equity, margin, free margin) from open positions.
+- Interval: 1000ms
+- Repositories used: `TradingAccountRepository`, `PositionRepository`, `InstrumentRepository`
+- Logic:
+  - Get active accounts → for each account:
+    - Get open positions
+    - For each position compute unrealized PnL and margin using current price from `PriceCacheService`
+    - Aggregate to account metrics and persist via `TradingAccountRepository.updateByField(...)`
+
+### Socket adapters (forex/crypto/indices)
+
+- Files: `sockets/iTickForex.js`, `sockets/iTickCrypto.js`, `sockets/iTickIndices.js`
+- Responsibilities:
+  - Maintain upstream websocket connection to iTick per asset type
+  - On each message: parse `symbol`, `ld` (last price), call `priceCacheService.updatePrice(...)`
+  - Forward raw message to subscribed clients via `subscriptionManager`
+  - No database writes; all pricing is in-memory
+
+### Orders API quick guide
+
+- Router: `http/orders.js`
+- Controller: `controllers/OrderController.js`
+
+Endpoints:
+- `POST /http/orders` — Place new order (pending or market)
+- `PUT /http/orders/:id` — Modify a pending order (SL/TP/limit)
+- `POST /http/orders/:id/cancel` — Cancel order
+- `DELETE /http/orders/:id` — Delete order
+- `GET /http/orders/:id` — Get one order
+- `GET /http/orders` — List orders (pagination & filters)
+- `POST /http/orders/filter` — Filter orders (no pagination unless provided)
+- `GET /http/accounts/:accountId/orders` — Orders by account
+- `GET /http/orders/status/:status` — Orders by status
+- `GET /http/accounts/:accountId/instruments/:instrumentId/orders` — Orders by instrument for account
+- `POST /http/orders/:id/fill` — Fill order at price (market execution style)
+- `POST /http/orders/execute-market` — Create + fill market order + trade + position
+- `POST /http/orders/market` — Convenience market order with auto price fetch
+- `GET /http/instruments/:instrumentId/price` — Get current price via `PriceService`
+
+Example: place a market buy
+
+```http
+POST /http/orders/market
+Content-Type: application/json
+
+{
+  "accountId": "acc-123",
+  "instrumentId": 1001,
+  "side": "buy",
+  "lotSize": 0.1,
+  "sl": 1.0700,
+  "tp": 1.0900
+}
+```
+
+### Service cadence and configuration
+
+- Intervals (defaults):
+  - Pending orders: 100ms
+  - Position checks: 100ms
+  - Account metrics: 1000ms
+  - Price cache stale clear: invoked periodically by app logic (see `server.js` and services)
+- Start/stop: services are started in `server.js` after the HTTP server begins listening.
+
+### Operational notes
+
+- Prices are cached in-memory only; no price writes to the symbols table.
+- Order lifecycle and positions are persisted via repositories.
+- Services are designed to be idempotent and safe to run continuously.
