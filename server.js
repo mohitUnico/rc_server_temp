@@ -79,8 +79,8 @@ process.on('unhandledRejection', (reason, promise) => {
 async function startServer() {
     try {
         // Initialize database
-        await DatabaseService.initializeDatabase();
-        logger.info('✅ Database initialized');
+        // await DatabaseService.initializeDatabase();
+        // logger.info('✅ Database initialized');
 
         // Start WebSocket server for Flutter clients
         startFlutterWebSocket(server);
