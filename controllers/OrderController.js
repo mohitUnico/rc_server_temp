@@ -18,7 +18,8 @@ const positionRepository = new PositionRepository();
 class OrderController {
 	/**
 	 * Place a new order
-	 * Expected body: accountId, instrumentId, orderType, lotSize, limitValue, slPrice|sl, tpPrice|tp, price, status
+	 * Expected body: accountId, instrumentId, orderType, lotSize, limitValue, slPrice|sl, tpPrice|tp, status
+	 * Note: price field is removed - orders are placed as pending with price = null
 	 */
 	static async placeOrder(req, res) {
 		try {
@@ -30,7 +31,6 @@ class OrderController {
 				limitValue = null,
 				sl = null,
 				tp = null,
-				price = 0,
 				status = OrderStatus.PENDING
 			} = req.body || {};
 
@@ -40,44 +40,41 @@ class OrderController {
 				});
 			}
 
-			// If market order, automatically fetch current price if not provided
+			// Check if this is a market order that needs immediate execution
 			const isMarketOrder = orderType === OrderType.MARKET_BUY || orderType === OrderType.MARKET_SELL;
-			let finalPrice = price;
-
+			
 			if (isMarketOrder) {
-				if (!price || price <= 0) {
-					try {
-						logger.info(`Fetching current price for market order - instrumentId: ${instrumentId}`);
-						finalPrice = await PriceService.getCurrentPrice(instrumentId);
-						logger.info(`Current price fetched: ${finalPrice}`);
-					} catch (error) {
-						logger.error('Failed to fetch current price for market order:', error);
-						return res.status(400).json({ 
-							error: `Failed to fetch current price for market order: ${error.message}` 
-						});
-					}
+				// For market orders, we need to fetch current price and execute immediately
+				let currentPrice;
+				try {
+					logger.info(`Fetching current price for market order - instrumentId: ${instrumentId}`);
+					currentPrice = await PriceService.getCurrentPrice(instrumentId);
+					logger.info(`Current price fetched: ${currentPrice}`);
+				} catch (error) {
+					logger.error('Failed to fetch current price for market order:', error);
+					return res.status(400).json({ 
+						error: `Failed to fetch current price for market order: ${error.message}` 
+					});
 				}
-			}
 
-			const orderData = {
-				account_id: accountId,
-				instrument_id: instrumentId,
-				order_type: orderType,
-				lot_size: lotSize,
-				limit_value: limitValue,
-				sl_price: sl,
-				tp_price: tp,
-				price: finalPrice,
-				status
-			};
+				// Create order data with current price
+				const orderData = {
+					account_id: accountId,
+					instrument_id: instrumentId,
+					order_type: orderType,
+					lot_size: lotSize,
+					limit_value: limitValue,
+					sl_price: sl,
+					tp_price: tp,
+					price: currentPrice,
+					status: OrderStatus.PENDING
+				};
 
-			// If market order, immediately fill and create trade + position
-			if (isMarketOrder) {
 				// 1) Place pending market order
 				const placedOrder = await orderRepository.placeOrder(orderData);
 
 				// 2) Fill order at current price
-				const filledOrder = await orderRepository.fillOrder(placedOrder.id, finalPrice);
+				const filledOrder = await orderRepository.fillOrder(placedOrder.id, currentPrice);
 
 				// 3) Create trade
 				const side = orderType === OrderType.MARKET_BUY ? 'buy' : 'sell';
@@ -87,7 +84,7 @@ class OrderController {
 					symbolId: instrumentId,
 					side,
 					quantity: lotSize,
-					price: finalPrice,
+					price: currentPrice,
 					fee: null
 				});
 
@@ -98,7 +95,7 @@ class OrderController {
 					instrumentId: instrumentId,
 					positionType,
 					lotSize: lotSize,
-					entryPrice: finalPrice,
+					entryPrice: currentPrice,
 					slPrice: sl,
 					tpPrice: tp,
 					marginUsed: 0
@@ -108,13 +105,29 @@ class OrderController {
 					order: filledOrder, 
 					trade, 
 					position,
-					executedPrice: finalPrice 
+					executedPrice: currentPrice 
+				});
+			} else {
+				// For non-market orders (limit, stop, etc.), place as pending with price = null
+				const orderData = {
+					account_id: accountId,
+					instrument_id: instrumentId,
+					order_type: orderType,
+					lot_size: lotSize,
+					limit_value: limitValue,
+					sl_price: sl,
+					tp_price: tp,
+					price: null, // Price will be set when order is filled
+					status: OrderStatus.PENDING
+				};
+
+				// Place pending order
+				const created = await orderRepository.placeOrder(orderData);
+				return res.status(201).json({
+					order: created,
+					message: 'Order placed as pending. Price will be set when order is filled.'
 				});
 			}
-
-			// Non-market: normal creation
-			const created = await orderRepository.placeOrder(orderData);
-			return res.status(201).json(created);
 		} catch (error) {
 			logger.error('placeOrder failed', error);
 			return res.status(400).json({ error: error.message });
@@ -349,28 +362,27 @@ class OrderController {
 
 	/**
 	 * Place a market order and immediately create trade and position
-	 * Body: accountId, instrumentId, side ('buy'|'sell'), lotSize, price?, slPrice?, tpPrice?
+	 * Body: accountId, instrumentId, side ('buy'|'sell'), lotSize, slPrice?, tpPrice?
+	 * Note: price field is removed - current price is fetched automatically
 	 */
 	static async executeMarketOrder(req, res) {
 		try {
-			const { accountId, instrumentId, side, lotSize, price, sl = null, tp = null } = req.body || {};
+			const { accountId, instrumentId, side, lotSize, sl = null, tp = null } = req.body || {};
 			if (!accountId || !instrumentId || !side || !lotSize) {
 				return res.status(400).json({ error: 'accountId, instrumentId, side, lotSize are required' });
 			}
 
-			// Get current price if not provided
-			let finalPrice = price;
-			if (!price || price <= 0) {
-				try {
-					logger.info(`Fetching current price for market order execution - instrumentId: ${instrumentId}`);
-					finalPrice = await PriceService.getCurrentPrice(instrumentId);
-					logger.info(`Current price fetched: ${finalPrice}`);
-				} catch (error) {
-					logger.error('Failed to fetch current price for market order execution:', error);
-					return res.status(400).json({ 
-						error: `Failed to fetch current price for market order: ${error.message}` 
-					});
-				}
+			// Get current price automatically
+			let finalPrice;
+			try {
+				logger.info(`Fetching current price for market order execution - instrumentId: ${instrumentId}`);
+				finalPrice = await PriceService.getCurrentPrice(instrumentId);
+				logger.info(`Current price fetched: ${finalPrice}`);
+			} catch (error) {
+				logger.error('Failed to fetch current price for market order execution:', error);
+				return res.status(400).json({ 
+					error: `Failed to fetch current price for market order: ${error.message}` 
+				});
 			}
 
 			// 1) Create pending market order

@@ -84,10 +84,10 @@ class PendingOrderService {
       // Get current price for the instrument from WebSocket cache
       const currentPrice = await priceCacheService.getCurrentPriceByInstrumentId(order.instrumentId);
       
-      if (!currentPrice) {
-        logger.warn(`Could not get current price for instrument ${order.instrumentId} from WebSocket cache`);
-        return;
-      }
+      // if (!currentPrice) {
+      //   logger.warn(`Could not get current price for instrument ${order.instrumentId} from WebSocket cache`);
+      //   return;
+      // }
 
       logger.debug(`Order ${order.id}: Current price ${currentPrice}, Limit: ${order.limitValue}, Order type: ${order.orderType}`);
 

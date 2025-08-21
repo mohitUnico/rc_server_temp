@@ -13,14 +13,14 @@ async function testMarketOrder() {
     const marketOrderData = {
       accountId: 1,
       instrumentId: 1, // EURUSD
-      side: 'buy',
+      orderType: 'marketBuy',
       lotSize: 0.1
     };
     
     logger.info('Placing market order without price...');
     logger.info('Order data:', JSON.stringify(marketOrderData, null, 2));
     
-    const response = await fetch(`${BASE_URL}/orders/market`, {
+    const response = await fetch(`${BASE_URL}/orders`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

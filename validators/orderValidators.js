@@ -18,14 +18,9 @@ export async function validateNewOrderPayload(req, res, next) {
 			return res.status(400).json({ error: 'lotSize must be a number greater than 0' });
 		}
 
-		// For market orders, price is optional (will be fetched automatically if not provided)
-		// For limit orders, price is required
-		const isMarketOrder = orderType === OrderType.MARKET_BUY || orderType === OrderType.MARKET_SELL;
-		const isLimitOrder = orderType === OrderType.BUY_LIMIT || orderType === OrderType.SELL_LIMIT;
-		
-		if (isLimitOrder && (!price || typeof price !== 'number' || price <= 0)) {
-			return res.status(400).json({ error: 'price is required and must be > 0 for limit orders' });
-		}
+		// Price field is no longer required for any order type
+		// Market orders will fetch price automatically
+		// Limit/Stop orders will be placed as pending with price = null
 
 		return next();
 	} catch (error) {

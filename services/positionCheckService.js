@@ -81,10 +81,10 @@ class PositionCheckService {
       // Get current price for the instrument from WebSocket cache
       const currentPrice = await priceCacheService.getCurrentPriceByInstrumentId(position.instrumentId);
       
-      if (!currentPrice) {
-        logger.warn(`Could not get current price for instrument ${position.instrumentId} from WebSocket cache`);
-        return;
-      }
+      // if (!currentPrice) {
+      //   logger.warn(`Could not get current price for instrument ${position.instrumentId} from WebSocket cache`);
+      //   return;
+      // }
 
       logger.debug(`Position ${position.id}: Current price ${currentPrice}, Entry: ${position.entryPrice}, SL: ${position.slPrice}, TP: ${position.tpPrice}`);
 

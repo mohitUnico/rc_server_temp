@@ -317,7 +317,7 @@ class PositionRepository extends BaseRepository {
   }
 
   /**
-   * Partial close position (matching Flutter partialClosePosition)
+   * Partial close position - creates a new closed position entry and updates the original position
    */
   async partialClosePosition({ originalPosition, closeLotSize, exitPrice, pnl }) {
     try {
@@ -332,41 +332,61 @@ class PositionRepository extends BaseRepository {
       const closeMargin = (originalMargin * closeLotSize) / originalPosition.lotSize;
       const remainingMargin = originalMargin - closeMargin;
 
-      // 1. Create closed position (the part being closed)
-      const closedPosition = await this.createPosition({
-        accountId: originalPosition.accountId,
-        instrumentId: originalPosition.instrumentId,
-        positionType: originalPosition.positionType,
-        lotSize: closeLotSize,
-        entryPrice: originalPosition.entryPrice,
-        slPrice: originalPosition.slPrice,
-        tpPrice: originalPosition.tpPrice,
-        marginUsed: closeMargin
-      });
+      // Calculate PnL for the closed portion if not provided
+      if (pnl === undefined) {
+        pnl = await this.calculatePnL(originalPosition, exitPrice);
+        // Adjust PnL for partial close
+        pnl = (pnl * closeLotSize) / originalPosition.lotSize;
+      }
 
-      // 2. Close the newly created position immediately
-      await this.closePosition({
-        positionId: closedPosition.id,
-        exitPrice: exitPrice,
-        pnl: pnl
-      });
+      // 1. Create a new closed position entry (the part being closed)
+      const closedPositionData = {
+        id: this.generatePositionId(),
+        account_id: originalPosition.accountId,
+        instrument_id: originalPosition.instrumentId,
+        position_type: originalPosition.positionType,
+        lot_size: closeLotSize,
+        entry_price: originalPosition.entryPrice,
+        sl_price: originalPosition.slPrice,
+        tp_price: originalPosition.tpPrice,
+        exit_price: exitPrice,
+        pnl: pnl,
+        status: PositionStatus.CLOSED,
+        margin_used: closeMargin,
+        opened_at: originalPosition.openedAt,
+        closed_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
 
-      // 3. Create open position (the remaining part)
-      const openPosition = await this.createPosition({
-        accountId: originalPosition.accountId,
-        instrumentId: originalPosition.instrumentId,
-        positionType: originalPosition.positionType,
-        lotSize: remainingLotSize,
-        entryPrice: originalPosition.entryPrice,
-        slPrice: originalPosition.slPrice,
-        tpPrice: originalPosition.tpPrice,
-        marginUsed: remainingMargin
-      });
+      const closedPosition = await this.create(closedPositionData);
 
-      // 4. Delete the original position
-      await this.deletePosition(originalPosition.id);
+      // 2. Update the original position (reduce lot size, keep status as open)
+      const updates = {
+        lot_size: remainingLotSize,
+        margin_used: remainingMargin,
+        updated_at: new Date().toISOString()
+      };
 
-      return { closedPosition, openPosition };
+      const updatedPosition = await this.updateById(originalPosition.id, updates);
+
+      // 3. Update account balance with the PnL from the closed portion
+      try {
+        await this.tradingAccountRepository.updateBalanceByAmountWithUid({
+          accountUid: originalPosition.accountId,
+          amount: pnl
+        });
+        console.log(`Successfully updated balance for account ${originalPosition.accountId} with PnL ${pnl}`);
+      } catch (balanceError) {
+        console.error('Error updating balance:', balanceError);
+        // Don't throw here - the position is already updated, we don't want to rollback
+        // Just log the error for debugging
+      }
+
+      return { 
+        closedPosition: Position.fromDatabase(closedPosition), 
+        openPosition: Position.fromDatabase(updatedPosition) 
+      };
     } catch (error) {
       console.error('Error partially closing position:', error);
       throw error;
