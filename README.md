@@ -1,6 +1,6 @@
 # 🚀 Real-Time Financial Data Gateway Server
 
-A robust Node.js server that acts as a real-time financial data gateway for Flutter clients, integrating with the iTick API and Supabase database. Features include WebSocket communication, subscription management, price tracking, and email services.
+A robust Node.js server that acts as a real-time financial data gateway for Flutter clients, integrating with the iTick API and Supabase database. Features include WebSocket communication, subscription management, and email services.
 
 ## 📋 Table of Contents
 
@@ -31,7 +31,7 @@ A robust Node.js server that acts as a real-time financial data gateway for Flut
 │ • Mobile App    │    │ • WebSocket     │    │ • Real-time     │
 │ • Web App       │    │   Manager       │    │   Data Stream   │
 │ • Desktop App   │    │ • Subscription  │    │ • Market Data   │
-└─────────────────┘    │   Manager       │    │ • Price Updates │
+└─────────────────┘    │   Manager       │    │ • Symbol Data   │
                        │ • HTTP API      │    └─────────────────┘
                        │ • Email Service │
                        └─────────────────┘
@@ -41,8 +41,6 @@ A robust Node.js server that acts as a real-time financial data gateway for Flut
                        │   Supabase      │
                        │   Database      │
                        │                 │
-                       │ • Symbols Table │
-                       │ • Price History │
                        │ • User Data     │
                        └─────────────────┘
 ```
@@ -64,9 +62,9 @@ A robust Node.js server that acts as a real-time financial data gateway for Flut
          │                   │                   │                   │
          │                   ▼                   ▼                   │
          │            ┌─────────────┐    ┌─────────────┐            │
-         │            │ Database    │    │ Price      │            │
-         │            │ Service     │    │ Update     │            │
-         │            └─────────────┘    │ Service    │            │
+         │            │ Database    │    │ Data       │            │
+         │            │ Service     │    │ Forwarding │            │
+         │            └─────────────┘    │            │            │
          │                   │           └─────────────┘            │
          │                   ▼                   │                   │
          │            ┌─────────────┐            │                   │
@@ -92,7 +90,7 @@ A robust Node.js server that acts as a real-time financial data gateway for Flut
 | **Multi-Asset Support** | Forex, Crypto, Indices data streams | ✅ Active |
 | **Subscription Management** | Per-client, per-symbol subscriptions | ✅ Active |
 | **Database Integration** | Supabase PostgreSQL integration | ✅ Active |
-| **Price Tracking** | Automatic price updates for tracked symbols | ✅ Active |
+
 | **Email Service** | Trading credentials delivery | ✅ Active |
 | **HTTP API** | RESTful endpoints for data access | ✅ Active |
 
@@ -100,7 +98,7 @@ A robust Node.js server that acts as a real-time financial data gateway for Flut
 
 #### 1. Real-time Data Streaming
 - **Protocol:** WebSocket (ws://)
-- **Data Format:** JSON with real-time price updates
+- **Data Format:** JSON with real-time market data
 - **Frequency:** Continuous streaming from iTick API
 - **Latency:** Sub-second updates
 
@@ -112,9 +110,7 @@ A robust Node.js server that acts as a real-time financial data gateway for Flut
 
 #### 3. Database Integration
 - **Database:** Supabase (PostgreSQL)
-- **Table:** `symbols` with composite primary key
-- **Operations:** CRUD for symbol management
-- **Triggers:** Automated price updates
+- **Operations:** Basic database connectivity for future features
 
 ## 📁 Project Structure
 
@@ -125,19 +121,15 @@ rc_server_temp1/
 │   └── Frame 1000001664.svg     # Alternative logo
 ├── 📁 config/                    # Configuration files
 │   ├── envConfig.js             # Environment variables
-│   ├── supabase.js              # Database client
-│   └── symbols.js               # Hardcoded symbol list
+│   └── supabase.js              # Database client
 ├── 📁 core/                      # Core business logic
 ├── 📁 http/                      # HTTP API endpoints
 │   ├── candlestick.js           # K-line data API
 │   ├── quote.js                 # Real-time quotes API
-│   ├── symbols.js               # Symbol management API
 │   └── tradingCredentials.js    # Email service API
 ├── 📁 services/                  # Business services
 │   ├── databaseService.js       # Database operations
-│   ├── emailService.js          # Email functionality
-│   ├── priceUpdateService.js    # Price updates
-│   └── symbolManagementService.js # Symbol CRUD
+│   └── emailService.js          # Email functionality
 ├── 📁 sockets/                   # WebSocket handlers
 │   ├── flutterClient.js         # Flutter client handler
 │   ├── iTickCrypto.js           # Crypto data handler
@@ -150,8 +142,6 @@ rc_server_temp1/
 ├── 📁 websocket/                 # WebSocket management
 │   └── WebSocketManager.js      # Generic WebSocket class
 ├── 📁 scripts/                   # Utility scripts
-│   ├── initAllSymbols.js        # Database initialization
-│   ├── manageSymbols.js         # Symbol management CLI
 │   ├── testEmailService.js      # Email testing
 │   └── testSetup.js             # System testing
 ├── server.js                     # Main server file
@@ -211,35 +201,9 @@ LOGO_PATH=./assets/raz_caps_logo.png
 
 ## ⚙️ Configuration
 
-### Database Schema
 
-```sql
--- Symbols table structure
-CREATE TABLE symbols (
-    symbol_name VARCHAR(50) NOT NULL,
-    symbol_type VARCHAR(20) NOT NULL,
-    price DECIMAL(15,6),
-    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (symbol_name, symbol_type)
-);
 
--- Index for performance
-CREATE INDEX idx_symbols_type ON symbols(symbol_type);
-CREATE INDEX idx_symbols_updated ON symbols(last_updated);
-```
 
-### Symbol Configuration
-
-The system uses a hardcoded list of tracked symbols in `config/symbols.js`:
-
-```javascript
-export const TRACKED_SYMBOLS = {
-    forex: ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD'],
-    crypto: ['BTCUSD', 'ETHUSD', 'ADAUSD', 'DOTUSD', 'LINKUSD'],
-    indices: ['SPX500', 'NAS100', 'US30', 'GER30', 'UK100']
-};
-```
 
 ## 🌐 API Endpoints
 
@@ -304,30 +268,7 @@ GET /http/quote?type=forex&symbol=EURUSD
 }
 ```
 
-#### 3. Symbol Management
-```http
-# Get all tracked symbols
-GET /http/tracked
 
-# Get symbols by type
-GET /http/tracked/forex
-
-# Add new symbol
-POST /http/tracked
-{
-  "symbol": "EURUSD",
-  "asset_type": "forex"
-}
-
-# Update symbol
-PUT /http/tracked/EURUSD/forex
-{
-  "price": 1.17282
-}
-
-# Delete symbol
-DELETE /http/tracked/EURUSD/forex
-```
 
 #### 4. Email Service
 ```http
@@ -441,44 +382,15 @@ ws.send(JSON.stringify({
 │   Application   │    │   Supabase      │    │   PostgreSQL   │
 │   Layer         │◄──►│   Client        │◄──►│   Database     │
 │                 │    │                 │    │                 │
-│ • Price Updates │    │ • Connection    │    │ • Symbols      │
-│ • Symbol Mgmt   │    │   Pool          │    │   Table        │
-│ • Data Queries  │    │ • Auth          │    │ • Indexes      │
-│ • CRUD Ops      │    │ • Real-time     │    │ • Triggers     │
+│ • Symbol Mgmt   │    │ • Connection    │    │ • Symbols      │
+│ • Data Queries  │    │   Pool          │    │   Table        │
+│ • CRUD Ops      │    │ • Auth          │    │ • Indexes      │
+│ • Real-time     │    │ • Real-time     │    │ • Triggers     │
 └─────────────────┘    │   Subscriptions │    └─────────────────┘
                        └─────────────────┘
 ```
 
-### Database Operations Flow
 
-```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│ WebSocket   │    │ Price      │    │ Database   │    │ Supabase   │
-│ Data        │───►│ Update     │───►│ Service    │───►│ Database   │
-│ Stream      │    │ Service    │    │            │    │            │
-└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-       │                   │                   │                   │
-       │                   ▼                   ▼                   │
-       │            ┌─────────────┐    ┌─────────────┐            │
-       │            │ Check if    │    │ Update      │            │
-       │            │ Symbol      │    │ Price in   │            │
-       │            │ Tracked     │    │ Symbols    │            │
-       │            └─────────────┘    │ Table      │            │
-       │                   │           └─────────────┘            │
-       │                   ▼                   │                   │
-       │            ┌─────────────┐            │                   │
-       │            │ Update      │            │                   │
-       │            │ Database    │            │                   │
-       │            └─────────────┘            │                   │
-       │                   │                   │                   │
-       └───────────────────┼───────────────────┼───────────────────┘
-                           ▼                   ▼
-                  ┌─────────────┐    ┌─────────────┐
-                  │ Send to     │    │ Log        │
-                  │ Flutter     │    │ Update     │
-                  │ Clients     │    │ Success    │
-                  └─────────────┘    └─────────────┘
-```
 
 ## 📧 Email Service
 
@@ -580,20 +492,8 @@ npm run test-setup
 
 **Tests:**
 - Database connection
-- Symbol management
-- Price updates
-- Data retrieval
 
-#### 3. Symbol Management
-```bash
-npm run manage-symbols
-```
 
-**Features:**
-- Add symbols
-- Remove symbols
-- List symbols
-- Update symbols
 
 ### Manual Testing
 

@@ -29,13 +29,11 @@ app.get('/health', (req, res) => {
 // Import HTTP routes
 import candlestickRouter from './http/candlestick.js';
 import quoteRouter from './http/quote.js';
-import symbolsRouter from './http/symbols.js';
 import tradingCredentialsRouter from './http/tradingCredentials.js';
 
 // Apply routes to app
 app.use('/http', candlestickRouter);
 app.use('/http', quoteRouter);
-app.use('/http', symbolsRouter);
 app.use('/http', tradingCredentialsRouter);
 
 // Graceful shutdown handling
@@ -104,7 +102,7 @@ async function startServer() {
         const PORT = process.env.PORT || 3000;
         server.listen(PORT, () => {
             logger.info(`🚀 Server running on port ${PORT}`);
-            logger.info('🎯 Architecture: Client Subscribe → iTick Data → Check Tracking → Update DB if Tracked → Send to Clients');
+            logger.info('🎯 Architecture: Client Subscribe → iTick Data → Forward to Clients');
             logger.info('📧 New Feature: Trading Credentials Email Service Available');
         });
 

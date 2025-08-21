@@ -1,7 +1,6 @@
 import WebSocket from 'ws';
 import { WebSocketManager } from '../websocket/WebSocketManager.js';
 import { WebSocketConfig } from '../config/websocket.js';
-import { PriceUpdateService } from '../services/priceUpdateService.js';
 import { getClientsForSymbol } from '../utils/subscriptionManager.js';
 
 let forexManager = null;
@@ -18,11 +17,10 @@ export async function connectToForex() {
                 const lastPrice = message.data?.ld;       // Last price (e.g., 1.0850)
 
                 if (symbol && lastPrice !== undefined) {
-                    // Check if symbol is tracked and update database if needed
-                    const updateResult = await PriceUpdateService.updatePrice(symbol, lastPrice, assetType);
+                    // Forward data to subscribed clients (no database updates)
                 }
 
-                // Always get clients subscribed to this symbol (regardless of tracking status)
+                // Always get clients subscribed to this symbol
                 const clients = getClientsForSymbol(assetType, symbol);
 
                 if (clients && clients.size > 0) {

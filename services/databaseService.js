@@ -5,10 +5,9 @@ export class DatabaseService {
         try {
             console.log('🔧 Checking database connection...');
 
+            // Test basic connectivity without specific table requirements
             const { data, error } = await supabase
-                .from('symbols') // Use the existing symbols table
-                .select('*')
-                .limit(1);
+                .rpc('version');
 
             if (error) {
                 console.error('❌ Database connection failed:', error);
@@ -16,7 +15,7 @@ export class DatabaseService {
             }
 
             console.log('✅ Database connection successful');
-            console.log('ℹ️ Using existing symbols table structure');
+            console.log('ℹ️ Basic database connectivity established');
 
         } catch (err) {
             console.error('❌ Database initialization failed:', err);
@@ -26,16 +25,15 @@ export class DatabaseService {
 
     static async getTableInfo() {
         try {
+            // Test basic connectivity without specific table requirements
             const { data, error } = await supabase
-                .from('symbols') // Use the existing symbols table
-                .select('*')
-                .limit(1);
+                .rpc('version');
 
             if (error) {
                 return { exists: false, error: error.message };
             }
 
-            return { exists: true, count: data.length };
+            return { exists: true, message: 'Database connection successful' };
         } catch (err) {
             return { exists: false, error: err.message };
         }

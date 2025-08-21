@@ -17,10 +17,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // Test the connection
 export async function testConnection() {
     try {
+        // Test basic connectivity without specific table requirements
         const { data, error } = await supabase
-            .from('symbols')
-            .select('count')
-            .limit(1);
+            .rpc('version');
 
         if (error) {
             console.error('❌ Supabase connection test failed:', error);
