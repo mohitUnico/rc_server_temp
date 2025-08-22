@@ -5,6 +5,7 @@
 import BaseRepository from './BaseRepository.js';
 import Instrument from '../models/Instrument.js';
 import { InstrumentStatus } from '../enums/instrumentEnums.js';
+import instrumentCacheService from '../services/instrumentCacheService.js';
 
 class InstrumentRepository extends BaseRepository {
   constructor() {
@@ -19,6 +20,12 @@ class InstrumentRepository extends BaseRepository {
    */
   async getAllInstruments() {
     try {
+      // First try to get from cache
+      const cachedInstruments = instrumentCacheService.getActiveInstruments();
+      if (cachedInstruments.length > 0) {
+        return cachedInstruments;
+      }
+
       const filters = { status: 'active' };
       const options = { orderBy: { column: 'symbol', ascending: true } };
       const result = await this.findAll(filters, options);
@@ -34,6 +41,13 @@ class InstrumentRepository extends BaseRepository {
    */
   async findInstrumentById(instrumentId) {
     try {
+      // First try to get from cache
+      const cachedInstrument = instrumentCacheService.getInstrumentById(instrumentId);
+      if (cachedInstrument) {
+        return cachedInstrument;
+      }
+
+      // If not in cache, get from database and add to cache
       const numericId = parseInt(instrumentId);
       if (this.instrumentCacheById.has(numericId)) {
         return this.instrumentCacheById.get(numericId);
@@ -46,6 +60,8 @@ class InstrumentRepository extends BaseRepository {
         if (instrument.symbol) {
           this.instrumentCacheBySymbol.set(instrument.symbol, instrument);
         }
+        // Also add to the main cache service
+        instrumentCacheService.updateInstrument(instrument);
       }
       return instrument;
     } catch (error) {
@@ -59,6 +75,12 @@ class InstrumentRepository extends BaseRepository {
    */
   async findInstrumentsByCategory(category) {
     try {
+      // First try to get from cache
+      const cachedInstruments = instrumentCacheService.getInstrumentsByCategory(category);
+      if (cachedInstruments.length > 0) {
+        return cachedInstruments;
+      }
+
       const filters = { 
         category: category,
         status: 'active'
@@ -78,6 +100,13 @@ class InstrumentRepository extends BaseRepository {
   async findInstrumentBySymbol(symbol) {
     try {
       if (!symbol) return null;
+      
+      // First try to get from cache
+      const cachedInstrument = instrumentCacheService.getInstrumentBySymbol(symbol);
+      if (cachedInstrument) {
+        return cachedInstrument;
+      }
+
       if (this.instrumentCacheBySymbol.has(symbol)) {
         return this.instrumentCacheBySymbol.get(symbol);
       }
@@ -93,6 +122,8 @@ class InstrumentRepository extends BaseRepository {
         if (instrument.id) {
           this.instrumentCacheById.set(instrument.id, instrument);
         }
+        // Also add to the main cache service
+        instrumentCacheService.updateInstrument(instrument);
       }
       return instrument;
     } catch (error) {

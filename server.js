@@ -12,6 +12,8 @@ import positionCheckService from './services/positionCheckService.js';
 import pendingOrderService from './services/pendingOrderService.js';
 import priceCacheService from './services/priceCacheService.js';
 import accountMetricsService from './services/accountMetricsService.js';
+import freeMarginMonitorService from './services/freeMarginMonitorService.js';
+import instrumentCacheService from './services/instrumentCacheService.js';
 
 const app = express();
 const server = createServer(app);
@@ -69,6 +71,12 @@ async function gracefulShutdown(signal) {
         
         accountMetricsService.stop();
         logger.info('✅ Account metrics service stopped');
+        
+        freeMarginMonitorService.stop();
+        logger.info('✅ Free margin monitor service stopped');
+        
+        instrumentCacheService.stopAutoRefresh();
+        logger.info('✅ Instrument cache service stopped');
     } catch (error) {
         logger.error('❌ Error stopping trading monitor services:', error);
     }
@@ -110,6 +118,10 @@ async function startServer() {
         await DatabaseService.initializeDatabase();
         logger.info('✅ Database initialized');
 
+        // Initialize instrument cache
+        await instrumentCacheService.initialize();
+        logger.info('✅ Instrument cache initialized');
+
         // Start WebSocket server for Flutter clients
         startFlutterWebSocket(server);
         logger.info('✅ Flutter WebSocket server started');
@@ -144,6 +156,13 @@ async function startServer() {
                 accountMetricsService.start();
                 logger.info('✅ Account metrics service started');
                 
+                freeMarginMonitorService.start();
+                logger.info('✅ Free margin monitor service started');
+                
+                // Start instrument cache auto-refresh (every 5 minutes)
+                instrumentCacheService.startAutoRefresh(300000);
+                logger.info('✅ Instrument cache auto-refresh started');
+                
                 // Start price cache cleanup interval (every 30 seconds)
                 setInterval(() => {
                     priceCacheService.clearStalePrices();
@@ -152,6 +171,8 @@ async function startServer() {
                 
                 logger.info('🎯 Trading monitor services: Position & Order monitoring active (using WebSocket prices)');
                 logger.info('📊 Account metrics service: Real-time equity, margin, and free margin updates active');
+                logger.info('🛡️ Free margin monitor service: Automatic position closure when free margin reaches 0');
+                logger.info('📈 Instrument cache service: In-memory caching with auto-refresh every 5 minutes');
             } catch (error) {
                 logger.error('❌ Failed to start trading monitor services:', error);
             }
