@@ -9,6 +9,9 @@ import { InstrumentStatus } from '../enums/instrumentEnums.js';
 class InstrumentRepository extends BaseRepository {
   constructor() {
     super('instruments');
+    // Simple in-memory cache to avoid repeated DB calls for the same instrument
+    this.instrumentCacheById = new Map();
+    this.instrumentCacheBySymbol = new Map();
   }
 
   /**
@@ -31,8 +34,20 @@ class InstrumentRepository extends BaseRepository {
    */
   async findInstrumentById(instrumentId) {
     try {
-      const result = await this.findById(parseInt(instrumentId));
-      return result ? Instrument.fromDatabase(result) : null;
+      const numericId = parseInt(instrumentId);
+      if (this.instrumentCacheById.has(numericId)) {
+        return this.instrumentCacheById.get(numericId);
+      }
+
+      const result = await this.findById(numericId);
+      const instrument = result ? Instrument.fromDatabase(result) : null;
+      if (instrument) {
+        this.instrumentCacheById.set(numericId, instrument);
+        if (instrument.symbol) {
+          this.instrumentCacheBySymbol.set(instrument.symbol, instrument);
+        }
+      }
+      return instrument;
     } catch (error) {
       console.error('Error finding instrument by ID:', error);
       return null;
@@ -62,12 +77,24 @@ class InstrumentRepository extends BaseRepository {
    */
   async findInstrumentBySymbol(symbol) {
     try {
+      if (!symbol) return null;
+      if (this.instrumentCacheBySymbol.has(symbol)) {
+        return this.instrumentCacheBySymbol.get(symbol);
+      }
+
       const filters = { 
         symbol: symbol,
         status: 'active'
       };
       const result = await this.findOne(filters);
-      return result ? Instrument.fromDatabase(result) : null;
+      const instrument = result ? Instrument.fromDatabase(result) : null;
+      if (instrument) {
+        this.instrumentCacheBySymbol.set(symbol, instrument);
+        if (instrument.id) {
+          this.instrumentCacheById.set(instrument.id, instrument);
+        }
+      }
+      return instrument;
     } catch (error) {
       console.error('Error finding instrument by symbol:', error);
       return null;

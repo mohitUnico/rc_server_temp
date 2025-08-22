@@ -57,12 +57,15 @@ class OrderRepository extends BaseRepository {
   }
 
   /**
-   * Find order by ID with retry logic
+   * Find order by ID with retry logic and instrument details
    */
   async findOrderById(id) {
     try {
       const result = await this.findById(id);
-      return result ? Order.fromDatabase(result) : null;
+      if (!result) return null;
+      
+      const order = Order.fromDatabase(result);
+      return await this.enrichOrderWithInstrumentDetails(order);
     } catch (error) {
       console.error('Error finding order by ID:', error);
       throw error;
@@ -70,7 +73,7 @@ class OrderRepository extends BaseRepository {
   }
 
   /**
-   * Find orders by account ID with retry logic (matching Flutter getOrdersByAccount)
+   * Find orders by account ID with retry logic and instrument details (matching Flutter getOrdersByAccount)
    */
   async findOrdersByAccountId(accountId, options = {}) {
     try {
@@ -79,7 +82,8 @@ class OrderRepository extends BaseRepository {
         ...options,
         orderBy: { column: 'created_at', ascending: false }
       });
-      return result.map(order => Order.fromDatabase(order));
+      const orders = result.map(order => Order.fromDatabase(order));
+      return await this.enrichOrdersWithInstrumentDetails(orders);
     } catch (error) {
       console.error('Error finding orders by account ID:', error);
       throw error;
@@ -87,7 +91,7 @@ class OrderRepository extends BaseRepository {
   }
 
   /**
-   * Find orders by status with retry logic (matching Flutter getOrdersByStatus)
+   * Find orders by status with retry logic and instrument details (matching Flutter getOrdersByStatus)
    */
   async findOrdersByStatus(status, accountId = null, options = {}) {
     try {
@@ -99,7 +103,8 @@ class OrderRepository extends BaseRepository {
         ...options,
         orderBy: { column: 'created_at', ascending: false }
       });
-      return result.map(order => Order.fromDatabase(order));
+      const orders = result.map(order => Order.fromDatabase(order));
+      return await this.enrichOrdersWithInstrumentDetails(orders);
     } catch (error) {
       console.error('Error finding orders by status:', error);
       throw error;
@@ -132,6 +137,13 @@ class OrderRepository extends BaseRepository {
    */
   async findCancelledOrders(accountId = null, options = {}) {
     return this.findOrdersByStatus(OrderStatus.CANCELLED, accountId, options);
+  }
+
+  /**
+   * Find rejected orders (matching Flutter getRejectedOrders)
+   */
+  async findRejectedOrders(accountId = null, options = {}) {
+    return this.findOrdersByStatus(OrderStatus.REJECTED, accountId, options);
   }
 
   /**
@@ -219,7 +231,7 @@ class OrderRepository extends BaseRepository {
   }
 
   /**
-   * Find orders by instrument with retry logic (matching Flutter getOrdersByInstrument)
+   * Find orders by instrument with retry logic and instrument details (matching Flutter getOrdersByInstrument)
    */
   async findOrdersByInstrument(accountId, instrumentId, options = {}) {
     try {
@@ -231,7 +243,8 @@ class OrderRepository extends BaseRepository {
         ...options,
         orderBy: { column: 'created_at', ascending: false }
       });
-      return result.map(order => Order.fromDatabase(order));
+      const orders = result.map(order => Order.fromDatabase(order));
+      return await this.enrichOrdersWithInstrumentDetails(orders);
     } catch (error) {
       console.error('Error finding orders by instrument:', error);
       throw error;
@@ -284,7 +297,7 @@ class OrderRepository extends BaseRepository {
   }
 
   /**
-   * Get orders with pagination
+   * Get orders with pagination and instrument details
    */
   async getOrdersWithPagination(page = 1, limit = 10, filters = {}) {
     try {
@@ -297,12 +310,13 @@ class OrderRepository extends BaseRepository {
 
       const result = await this.findAll(filters, options);
       const orders = result.map(order => Order.fromDatabase(order));
+      const enrichedOrders = await this.enrichOrdersWithInstrumentDetails(orders);
       
       const totalCount = await this.count(filters);
       const totalPages = Math.ceil(totalCount / limit);
 
       return {
-        orders,
+        orders: enrichedOrders,
         pagination: {
           page,
           limit,
@@ -340,6 +354,98 @@ class OrderRepository extends BaseRepository {
     } catch (error) {
       console.error('Error getting order statistics:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Enrich a single order with instrument details
+   */
+  async enrichOrderWithInstrumentDetails(order) {
+    try {
+      if (!order.instrumentId) {
+        return order;
+      }
+
+      // Import InstrumentRepository dynamically to avoid circular dependencies
+      const { default: InstrumentRepository } = await import('./InstrumentRepository.js');
+      const instrumentRepo = new InstrumentRepository();
+      
+      const instrument = await instrumentRepo.findInstrumentById(order.instrumentId);
+      
+      if (instrument) {
+        // Add instrument details to the order object while preserving the Order model instance
+        order.instrument = {
+          id: instrument.id,
+          symbol: instrument.symbol,
+          name: instrument.name,
+          category: instrument.category,
+          status: instrument.status
+        };
+      }
+      
+      return order;
+    } catch (error) {
+      console.error('Error enriching order with instrument details:', error);
+      return order; // Return original order if enrichment fails
+    }
+  }
+
+  /**
+   * Find all orders with instrument details enrichment
+   */
+  async findAllWithInstrumentDetails(filters = {}, options = {}) {
+    try {
+      const result = await this.findAll(filters, options);
+      const orders = result.map(order => Order.fromDatabase(order));
+      return await this.enrichOrdersWithInstrumentDetails(orders);
+    } catch (error) {
+      console.error('Error finding all orders with instrument details:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Enrich multiple orders with instrument details
+   */
+  async enrichOrdersWithInstrumentDetails(orders) {
+    try {
+      if (!orders || orders.length === 0) {
+        return orders;
+      }
+
+      // Import InstrumentRepository dynamically to avoid circular dependencies
+      const { default: InstrumentRepository } = await import('./InstrumentRepository.js');
+      const instrumentRepo = new InstrumentRepository();
+      
+      // Get unique instrument IDs to minimize database queries
+      const instrumentIds = [...new Set(orders.map(order => order.instrumentId).filter(id => id))];
+      
+      // Fetch all instruments in one query
+      const instruments = {};
+      for (const instrumentId of instrumentIds) {
+        const instrument = await instrumentRepo.findInstrumentById(instrumentId);
+        if (instrument) {
+          instruments[instrumentId] = {
+            id: instrument.id,
+            symbol: instrument.symbol,
+            name: instrument.name,
+            category: instrument.category,
+            status: instrument.status
+          };
+        }
+      }
+      
+      // Enrich each order with instrument details while preserving Order model instances
+      orders.forEach(order => {
+        if (order.instrumentId && instruments[order.instrumentId]) {
+          order.instrument = instruments[order.instrumentId];
+        }
+      });
+      
+      return orders;
+    } catch (error) {
+      console.error('Error enriching orders with instrument details:', error);
+      return orders; // Return original orders if enrichment fails
     }
   }
 }

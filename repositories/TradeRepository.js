@@ -44,7 +44,7 @@ class TradeRepository extends BaseRepository {
   }
 
   /**
-   * Get all trades for an account with retry logic (matching Flutter getTradesByAccount)
+   * Get all trades for an account with retry logic and instrument details (matching Flutter getTradesByAccount)
    */
   async findTradesByAccountId(accountId, options = {}) {
     try {
@@ -53,7 +53,8 @@ class TradeRepository extends BaseRepository {
         ...options,
         orderBy: { column: 'created_at', ascending: false }
       });
-      return result.map(trade => Trade.fromDatabase(trade));
+      const trades = result.map(trade => Trade.fromDatabase(trade));
+      return await this.enrichTradesWithInstrumentDetails(trades);
     } catch (error) {
       console.error('Error finding trades by account ID:', error);
       throw error;
@@ -61,7 +62,7 @@ class TradeRepository extends BaseRepository {
   }
 
   /**
-   * Get trades for a specific order with retry logic (matching Flutter getTradesByOrder)
+   * Get trades for a specific order with retry logic and instrument details (matching Flutter getTradesByOrder)
    */
   async findTradesByOrderId(orderId, options = {}) {
     try {
@@ -70,7 +71,8 @@ class TradeRepository extends BaseRepository {
         ...options,
         orderBy: { column: 'created_at', ascending: false }
       });
-      return result.map(trade => Trade.fromDatabase(trade));
+      const trades = result.map(trade => Trade.fromDatabase(trade));
+      return await this.enrichTradesWithInstrumentDetails(trades);
     } catch (error) {
       console.error('Error finding trades by order ID:', error);
       throw error;
@@ -78,7 +80,7 @@ class TradeRepository extends BaseRepository {
   }
 
   /**
-   * Get trades for a specific symbol with retry logic (matching Flutter getTradesBySymbol)
+   * Get trades for a specific symbol with retry logic and instrument details (matching Flutter getTradesBySymbol)
    */
   async findTradesBySymbolId(accountId, symbolId, options = {}) {
     try {
@@ -90,7 +92,8 @@ class TradeRepository extends BaseRepository {
         ...options,
         orderBy: { column: 'created_at', ascending: false }
       });
-      return result.map(trade => Trade.fromDatabase(trade));
+      const trades = result.map(trade => Trade.fromDatabase(trade));
+      return await this.enrichTradesWithInstrumentDetails(trades);
     } catch (error) {
       console.error('Error finding trades by symbol ID:', error);
       throw error;
@@ -98,12 +101,15 @@ class TradeRepository extends BaseRepository {
   }
 
   /**
-   * Get trade by ID with retry logic (matching Flutter getTradeById)
+   * Get trade by ID with retry logic and instrument details (matching Flutter getTradeById)
    */
   async findTradeById(id) {
     try {
       const result = await this.findById(id);
-      return result ? Trade.fromDatabase(result) : null;
+      if (!result) return null;
+      
+      const trade = Trade.fromDatabase(result);
+      return await this.enrichTradeWithInstrumentDetails(trade);
     } catch (error) {
       console.error('Error finding trade by ID:', error);
       return null; // Return null if trade not found (matching Flutter behavior)
@@ -157,7 +163,7 @@ class TradeRepository extends BaseRepository {
   }
 
   /**
-   * Find trades by side (buy/sell)
+   * Find trades by side (buy/sell) with instrument details
    */
   async findTradesBySide(side, options = {}) {
     try {
@@ -166,7 +172,8 @@ class TradeRepository extends BaseRepository {
         ...options,
         orderBy: { column: 'created_at', ascending: false }
       });
-      return result.map(trade => Trade.fromDatabase(trade));
+      const trades = result.map(trade => Trade.fromDatabase(trade));
+      return await this.enrichTradesWithInstrumentDetails(trades);
     } catch (error) {
       console.error('Error finding trades by side:', error);
       throw error;
@@ -230,7 +237,7 @@ class TradeRepository extends BaseRepository {
   }
 
   /**
-   * Get trades with pagination
+   * Get trades with pagination and instrument details
    */
   async getTradesWithPagination(page = 1, limit = 10, filters = {}) {
     try {
@@ -243,12 +250,13 @@ class TradeRepository extends BaseRepository {
 
       const result = await this.findAll(filters, options);
       const trades = result.map(trade => Trade.fromDatabase(trade));
+      const enrichedTrades = await this.enrichTradesWithInstrumentDetails(trades);
       
       const totalCount = await this.count(filters);
       const totalPages = Math.ceil(totalCount / limit);
 
       return {
-        trades,
+        trades: enrichedTrades,
         pagination: {
           page,
           limit,
@@ -329,6 +337,98 @@ class TradeRepository extends BaseRepository {
     } catch (error) {
       console.error('Error getting trade volume by symbol:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Find all trades with instrument details enrichment
+   */
+  async findAllWithInstrumentDetails(filters = {}, options = {}) {
+    try {
+      const result = await this.findAll(filters, options);
+      const trades = result.map(trade => Trade.fromDatabase(trade));
+      return await this.enrichTradesWithInstrumentDetails(trades);
+    } catch (error) {
+      console.error('Error finding all trades with instrument details:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Enrich a single trade with instrument details
+   */
+  async enrichTradeWithInstrumentDetails(trade) {
+    try {
+      if (!trade.symbolId) {
+        return trade;
+      }
+
+      // Import InstrumentRepository dynamically to avoid circular dependencies
+      const { default: InstrumentRepository } = await import('./InstrumentRepository.js');
+      const instrumentRepo = new InstrumentRepository();
+      
+      const instrument = await instrumentRepo.findInstrumentById(trade.symbolId);
+      
+      if (instrument) {
+        // Add instrument details to the trade object while preserving the Trade model instance
+        trade.instrument = {
+          id: instrument.id,
+          symbol: instrument.symbol,
+          name: instrument.name,
+          category: instrument.category,
+          status: instrument.status
+        };
+      }
+      
+      return trade;
+    } catch (error) {
+      console.error('Error enriching trade with instrument details:', error);
+      return trade; // Return original trade if enrichment fails
+    }
+  }
+
+  /**
+   * Enrich multiple trades with instrument details
+   */
+  async enrichTradesWithInstrumentDetails(trades) {
+    try {
+      if (!trades || trades.length === 0) {
+        return trades;
+      }
+
+      // Import InstrumentRepository dynamically to avoid circular dependencies
+      const { default: InstrumentRepository } = await import('./InstrumentRepository.js');
+      const instrumentRepo = new InstrumentRepository();
+      
+      // Get unique symbol IDs to minimize database queries
+      const symbolIds = [...new Set(trades.map(trade => trade.symbolId).filter(id => id))];
+      
+      // Fetch all instruments in one query
+      const instruments = {};
+      for (const symbolId of symbolIds) {
+        const instrument = await instrumentRepo.findInstrumentById(symbolId);
+        if (instrument) {
+          instruments[symbolId] = {
+            id: instrument.id,
+            symbol: instrument.symbol,
+            name: instrument.name,
+            category: instrument.category,
+            status: instrument.status
+          };
+        }
+      }
+      
+      // Enrich each trade with instrument details while preserving Trade model instances
+      trades.forEach(trade => {
+        if (trade.symbolId && instruments[trade.symbolId]) {
+          trade.instrument = instruments[trade.symbolId];
+        }
+      });
+      
+      return trades;
+    } catch (error) {
+      console.error('Error enriching trades with instrument details:', error);
+      return trades; // Return original trades if enrichment fails
     }
   }
 }

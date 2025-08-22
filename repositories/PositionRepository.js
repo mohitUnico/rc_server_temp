@@ -64,7 +64,7 @@ class PositionRepository extends BaseRepository {
   }
 
   /**
-   * Get all positions for an account with retry logic (matching Flutter getPositionsByAccount)
+   * Get all positions for an account with retry logic and instrument details (matching Flutter getPositionsByAccount)
    */
   async findPositionsByAccountId(accountId, options = {}) {
     try {
@@ -73,7 +73,8 @@ class PositionRepository extends BaseRepository {
         ...options,
         orderBy: { column: 'created_at', ascending: false }
       });
-      return result.map(position => Position.fromDatabase(position));
+      const positions = result.map(position => Position.fromDatabase(position));
+      return await this.enrichPositionsWithInstrumentDetails(positions);
     } catch (error) {
       console.error('Error finding positions by account ID:', error);
       throw error;
@@ -81,7 +82,7 @@ class PositionRepository extends BaseRepository {
   }
 
   /**
-   * Get open positions for an account with retry logic (matching Flutter getOpenPositionsByAccount)
+   * Get open positions for an account with retry logic and instrument details (matching Flutter getOpenPositionsByAccount)
    */
   async findOpenPositionsByAccountId(accountId, options = {}) {
     try {
@@ -93,9 +94,31 @@ class PositionRepository extends BaseRepository {
         ...options,
         orderBy: { column: 'created_at', ascending: false }
       });
-      return result.map(position => Position.fromDatabase(position));
+      const positions = result.map(position => Position.fromDatabase(position));
+      return await this.enrichPositionsWithInstrumentDetails(positions);
     } catch (error) {
       console.error('Error finding open positions by account ID:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get closed positions for an account with retry logic and instrument details (matching Flutter getClosedPositionsByAccount)
+   */
+  async findClosedPositionsByAccountId(accountId, options = {}) {
+    try {
+      const filters = { 
+        account_id: accountId,
+        status: PositionStatus.CLOSED
+      };
+      const result = await this.findAll(filters, {
+        ...options,
+        orderBy: { column: 'closed_at', ascending: false }
+      });
+      const positions = result.map(position => Position.fromDatabase(position));
+      return await this.enrichPositionsWithInstrumentDetails(positions);
+    } catch (error) {
+      console.error('Error finding closed positions by account ID:', error);
       throw error;
     }
   }
@@ -292,12 +315,15 @@ class PositionRepository extends BaseRepository {
   }
 
   /**
-   * Get position by ID with retry logic
+   * Get position by ID with retry logic and instrument details
    */
   async findPositionById(id) {
     try {
       const result = await this.findById(id);
-      return result ? Position.fromDatabase(result) : null;
+      if (!result) return null;
+      
+      const position = Position.fromDatabase(result);
+      return await this.enrichPositionWithInstrumentDetails(position);
     } catch (error) {
       console.error('Error finding position by ID:', error);
       throw error;
@@ -394,7 +420,7 @@ class PositionRepository extends BaseRepository {
   }
 
   /**
-   * Find positions by status with retry logic
+   * Find positions by status with retry logic and instrument details
    */
   async findPositionsByStatus(status, options = {}) {
     try {
@@ -403,7 +429,8 @@ class PositionRepository extends BaseRepository {
         ...options,
         orderBy: { column: 'created_at', ascending: false }
       });
-      return result.map(position => Position.fromDatabase(position));
+      const positions = result.map(position => Position.fromDatabase(position));
+      return await this.enrichPositionsWithInstrumentDetails(positions);
     } catch (error) {
       console.error('Error finding positions by status:', error);
       throw error;
@@ -425,7 +452,7 @@ class PositionRepository extends BaseRepository {
   }
 
   /**
-   * Find positions by type (buy/sell)
+   * Find positions by type (buy/sell) with instrument details
    */
   async findPositionsByType(positionType, options = {}) {
     try {
@@ -434,7 +461,8 @@ class PositionRepository extends BaseRepository {
         ...options,
         orderBy: { column: 'created_at', ascending: false }
       });
-      return result.map(position => Position.fromDatabase(position));
+      const positions = result.map(position => Position.fromDatabase(position));
+      return await this.enrichPositionsWithInstrumentDetails(positions);
     } catch (error) {
       console.error('Error finding positions by type:', error);
       throw error;
@@ -456,7 +484,7 @@ class PositionRepository extends BaseRepository {
   }
 
   /**
-   * Get positions with pagination
+   * Get positions with pagination and instrument details
    */
   async getPositionsWithPagination(page = 1, limit = 10, filters = {}) {
     try {
@@ -469,12 +497,13 @@ class PositionRepository extends BaseRepository {
 
       const result = await this.findAll(filters, options);
       const positions = result.map(position => Position.fromDatabase(position));
+      const enrichedPositions = await this.enrichPositionsWithInstrumentDetails(positions);
       
       const totalCount = await this.count(filters);
       const totalPages = Math.ceil(totalCount / limit);
 
       return {
-        positions,
+        positions: enrichedPositions,
         pagination: {
           page,
           limit,
@@ -521,6 +550,98 @@ class PositionRepository extends BaseRepository {
     } catch (error) {
       console.error('Error getting position statistics:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Find all positions with instrument details enrichment
+   */
+  async findAllWithInstrumentDetails(filters = {}, options = {}) {
+    try {
+      const result = await this.findAll(filters, options);
+      const positions = result.map(position => Position.fromDatabase(position));
+      return await this.enrichPositionsWithInstrumentDetails(positions);
+    } catch (error) {
+      console.error('Error finding all positions with instrument details:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Enrich a single position with instrument details
+   */
+  async enrichPositionWithInstrumentDetails(position) {
+    try {
+      if (!position.instrumentId) {
+        return position;
+      }
+
+      // Import InstrumentRepository dynamically to avoid circular dependencies
+      const { default: InstrumentRepository } = await import('./InstrumentRepository.js');
+      const instrumentRepo = new InstrumentRepository();
+      
+      const instrument = await instrumentRepo.findInstrumentById(position.instrumentId);
+      
+      if (instrument) {
+        // Add instrument details to the position object while preserving the Position model instance
+        position.instrument = {
+          id: instrument.id,
+          symbol: instrument.symbol,
+          name: instrument.name,
+          category: instrument.category,
+          status: instrument.status
+        };
+      }
+      
+      return position;
+    } catch (error) {
+      console.error('Error enriching position with instrument details:', error);
+      return position; // Return original position if enrichment fails
+    }
+  }
+
+  /**
+   * Enrich multiple positions with instrument details
+   */
+  async enrichPositionsWithInstrumentDetails(positions) {
+    try {
+      if (!positions || positions.length === 0) {
+        return positions;
+      }
+
+      // Import InstrumentRepository dynamically to avoid circular dependencies
+      const { default: InstrumentRepository } = await import('./InstrumentRepository.js');
+      const instrumentRepo = new InstrumentRepository();
+      
+      // Get unique instrument IDs to minimize database queries
+      const instrumentIds = [...new Set(positions.map(position => position.instrumentId).filter(id => id))];
+      
+      // Fetch all instruments in one query
+      const instruments = {};
+      for (const instrumentId of instrumentIds) {
+        const instrument = await instrumentRepo.findInstrumentById(instrumentId);
+        if (instrument) {
+          instruments[instrumentId] = {
+            id: instrument.id,
+            symbol: instrument.symbol,
+            name: instrument.name,
+            category: instrument.category,
+            status: instrument.status
+          };
+        }
+      }
+      
+      // Enrich each position with instrument details while preserving Position model instances
+      positions.forEach(position => {
+        if (position.instrumentId && instruments[position.instrumentId]) {
+          position.instrument = instruments[position.instrumentId];
+        }
+      });
+      
+      return positions;
+    } catch (error) {
+      console.error('Error enriching positions with instrument details:', error);
+      return positions; // Return original positions if enrichment fails
     }
   }
 }

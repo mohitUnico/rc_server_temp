@@ -135,20 +135,28 @@ class OrderController {
 	}
 
 	/**
-	 * Modify an existing order (only pending orders can be modified)
+	 * Modify an existing order for a specific account (only pending orders can be modified)
 	 * Body may include: limitValue, slPrice|sl, tpPrice|tp; ID can be in params.id or body.orderId/body.id
 	 */
 	static async modifyOrder(req, res) {
 		try {
-			const id = req.params?.id || req.body?.orderId || req.body?.id;
+			const { id, accountId } = req.params;
 			if (!id) {
 				return res.status(400).json({ error: 'Missing required field: order id' });
+			}
+			if (!accountId) {
+				return res.status(400).json({ error: 'Missing required field: accountId' });
 			}
 
 			// First, get the current order to check its status
 			const currentOrder = await orderRepository.findOrderById(id);
 			if (!currentOrder) {
 				return res.status(404).json({ error: 'Order not found' });
+			}
+
+			// Verify the order belongs to the specified account
+			if (currentOrder.accountId != accountId) {
+				return res.status(403).json({ error: 'Access denied: Order does not belong to this account' });
 			}
 
 			// Only pending orders can be modified
@@ -180,13 +188,27 @@ class OrderController {
 	}
 
 	/**
-	 * Cancel an existing order by ID
+	 * Cancel an existing order by ID for a specific account
 	 */
 	static async cancelOrder(req, res) {
 		try {
-			const id = req.params?.id || req.body?.orderId || req.body?.id;
+			const { id, accountId } = req.params;
 			if (!id) {
 				return res.status(400).json({ error: 'Missing required field: order id' });
+			}
+			if (!accountId) {
+				return res.status(400).json({ error: 'Missing required field: accountId' });
+			}
+
+			// First, get the current order to verify ownership
+			const currentOrder = await orderRepository.findOrderById(id);
+			if (!currentOrder) {
+				return res.status(404).json({ error: 'Order not found' });
+			}
+
+			// Verify the order belongs to the specified account
+			if (currentOrder.accountId != accountId) {
+				return res.status(403).json({ error: 'Access denied: Order does not belong to this account' });
 			}
 
 			const cancelled = await orderRepository.cancelOrder(id);
@@ -198,13 +220,27 @@ class OrderController {
 	}
 
 	/**
-	 * Delete an order by ID
+	 * Delete an order by ID for a specific account
 	 */
 	static async deleteOrder(req, res) {
 		try {
-			const id = req.params?.id || req.body?.orderId || req.body?.id;
+			const { id, accountId } = req.params;
 			if (!id) {
 				return res.status(400).json({ error: 'Missing required field: order id' });
+			}
+			if (!accountId) {
+				return res.status(400).json({ error: 'Missing required field: accountId' });
+			}
+
+			// First, get the current order to verify ownership
+			const currentOrder = await orderRepository.findOrderById(id);
+			if (!currentOrder) {
+				return res.status(404).json({ error: 'Order not found' });
+			}
+
+			// Verify the order belongs to the specified account
+			if (currentOrder.accountId != accountId) {
+				return res.status(403).json({ error: 'Access denied: Order does not belong to this account' });
 			}
 
 			await orderRepository.deleteOrder(id);
@@ -216,19 +252,28 @@ class OrderController {
 	}
 
 	/**
-	 * Get a single order by ID
+	 * Get a single order by ID for a specific account
 	 */
 	static async getOrderById(req, res) {
 		try {
-			const id = req.params?.id || req.query?.id;
+			const { id, accountId } = req.params;
 			if (!id) {
 				return res.status(400).json({ error: 'Missing required field: id' });
+			}
+			if (!accountId) {
+				return res.status(400).json({ error: 'Missing required field: accountId' });
 			}
 
 			const order = await orderRepository.findOrderById(id);
 			if (!order) {
 				return res.status(404).json({ error: 'Order not found' });
 			}
+
+			// Verify the order belongs to the specified account
+			if (order.accountId != accountId) {
+				return res.status(403).json({ error: 'Access denied: Order does not belong to this account' });
+			}
+
 			return res.json(order);
 		} catch (error) {
 			logger.error('getOrderById failed', error);
@@ -237,17 +282,19 @@ class OrderController {
 	}
 
 	/**
-	 * Get all orders with optional pagination and filters
-	 * Query: page, limit, status, accountId, instrumentId
+	 * Get all orders for a specific account with optional pagination and filters
+	 * Query: page, limit, status, instrumentId
 	 */
 	static async getAllOrders(req, res) {
 		try {
+			const { accountId } = req.params;
+			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
+
 			const page = parseInt(req.query.page || '1', 10);
 			const limit = parseInt(req.query.limit || '20', 10);
 
-			const filters = {};
+			const filters = { account_id: accountId };
 			if (req.query.status) filters.status = req.query.status;
-			if (req.query.accountId) filters.account_id = req.query.accountId;
 			if (req.query.instrumentId) filters.instrument_id = req.query.instrumentId;
 
 			const result = await orderRepository.getOrdersWithPagination(page, limit, filters);
@@ -274,14 +321,14 @@ class OrderController {
 	}
 
 	/**
-	 * Get orders by status (optionally by account)
+	 * Get orders by status for a specific account
 	 */
 	static async getOrdersByStatus(req, res) {
 		try {
-			const { status } = req.params;
-			const { accountId } = req.query;
+			const { status, accountId } = req.params;
 			if (!status) return res.status(400).json({ error: 'status is required' });
-			const orders = await orderRepository.findOrdersByStatus(status, accountId || null);
+			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
+			const orders = await orderRepository.findOrdersByStatus(status, accountId);
 			return res.json(orders);
 		} catch (error) {
 			logger.error('getOrdersByStatus failed', error);
@@ -290,12 +337,25 @@ class OrderController {
 	}
 
 	/**
-	 * Get placed/pending/filled/cancelled helpers
+	 * Get pending/placed/filled/cancelled/rejected helpers for a specific account
 	 */
+	static async getPendingOrders(req, res) {
+		try {
+			const { accountId } = req.params;
+			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
+			const orders = await orderRepository.findPendingOrders(accountId);
+			return res.json(orders);
+		} catch (error) {
+			logger.error('getPendingOrders failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
 	static async getPlacedOrders(req, res) {
 		try {
-			const { accountId } = req.query;
-			const orders = await orderRepository.findPlacedOrders(accountId || null);
+			const { accountId } = req.params;
+			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
+			const orders = await orderRepository.findPlacedOrders(accountId);
 			return res.json(orders);
 		} catch (error) {
 			logger.error('getPlacedOrders failed', error);
@@ -305,8 +365,9 @@ class OrderController {
 
 	static async getFilledOrders(req, res) {
 		try {
-			const { accountId } = req.query;
-			const orders = await orderRepository.findFilledOrders(accountId || null);
+			const { accountId } = req.params;
+			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
+			const orders = await orderRepository.findFilledOrders(accountId);
 			return res.json(orders);
 		} catch (error) {
 			logger.error('getFilledOrders failed', error);
@@ -316,11 +377,24 @@ class OrderController {
 
 	static async getCancelledOrders(req, res) {
 		try {
-			const { accountId } = req.query;
-			const orders = await orderRepository.findCancelledOrders(accountId || null);
+			const { accountId } = req.params;
+			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
+			const orders = await orderRepository.findCancelledOrders(accountId);
 			return res.json(orders);
 		} catch (error) {
 			logger.error('getCancelledOrders failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
+	static async getRejectedOrders(req, res) {
+		try {
+			const { accountId } = req.params;
+			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
+			const orders = await orderRepository.findRejectedOrders(accountId);
+			return res.json(orders);
+		} catch (error) {
+			logger.error('getRejectedOrders failed', error);
 			return res.status(400).json({ error: error.message });
 		}
 	}
@@ -439,13 +513,16 @@ class OrderController {
 	}
 
 	/**
-	 * Filter orders by arbitrary parameters (same as getAll but without pagination if not provided)
+	 * Filter orders for a specific account (same as getAll but without pagination if not provided)
 	 */
 	static async filterOrders(req, res) {
 		try {
-			const allowed = ['status', 'account_id', 'instrument_id', 'order_type'];
+			const { accountId } = req.params;
+			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
+
+			const allowed = ['status', 'instrument_id', 'order_type'];
 			const rawFilters = req.body?.filters || req.query || {};
-			const filters = {};
+			const filters = { account_id: accountId };
 			for (const key of allowed) {
 				if (rawFilters[key] !== undefined) filters[key] = rawFilters[key];
 			}
@@ -458,8 +535,8 @@ class OrderController {
 				return res.json(result);
 			}
 
-			const items = await orderRepository.findAll(filters);
-			return res.json(items.map(item => Order.fromDatabase(item)));
+			const orders = await orderRepository.findAllWithInstrumentDetails(filters);
+			return res.json(orders);
 		} catch (error) {
 			logger.error('filterOrders failed', error);
 			return res.status(400).json({ error: error.message });

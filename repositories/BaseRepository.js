@@ -10,8 +10,8 @@ class BaseRepository {
     this.supabase = supabase;
     
     // Retry configuration (matching Flutter repositories)
-    this.maxRetries = 3;
-    this.retryDelay = 2000; // 2 seconds in milliseconds
+    this.maxRetries = 5;
+    this.retryDelay = 2000; // base delay in milliseconds (will use exponential backoff)
   }
 
   /**
@@ -51,8 +51,10 @@ class BaseRepository {
 
       attempts++;
       if (attempts < this.maxRetries) {
-        console.log(`Retrying ${operationName} in ${this.retryDelay / 1000} seconds...`);
-        await this.delay(this.retryDelay);
+        // Exponential backoff: 2s, 4s, 8s, 16s ... capped implicitly by attempts
+        const delayMs = this.retryDelay * Math.pow(2, attempts - 1);
+        console.log(`Retrying ${operationName} in ${Math.ceil(delayMs / 1000)} seconds...`);
+        await this.delay(delayMs);
       }
     }
 

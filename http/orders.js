@@ -7,34 +7,36 @@ const router = express.Router();
 // Create / place order
 router.post('/orders', validateNewOrderPayload, validateFreeMarginPositive, (req, res) => OrderController.placeOrder(req, res));
 
-// Modify order
-router.put('/orders/:id', (req, res) => OrderController.modifyOrder(req, res));
+// Modify order for a specific account
+router.put('/accounts/:accountId/orders/:id', (req, res) => OrderController.modifyOrder(req, res));
 
-// Cancel order
-router.post('/orders/:id/cancel', (req, res) => OrderController.cancelOrder(req, res));
+// Cancel order for a specific account
+router.post('/accounts/:accountId/orders/:id/cancel', (req, res) => OrderController.cancelOrder(req, res));
 
-// Delete order
-router.delete('/orders/:id', (req, res) => OrderController.deleteOrder(req, res));
+// Delete order for a specific account
+router.delete('/accounts/:accountId/orders/:id', (req, res) => OrderController.deleteOrder(req, res));
 
-// Get one order by id
-router.get('/orders/:id', (req, res) => OrderController.getOrderById(req, res));
+// Get all orders for a specific account (supports pagination and filters via query)
+router.get('/accounts/:accountId/orders', (req, res) => OrderController.getAllOrders(req, res));
 
-// Get all orders (supports pagination and filters via query)
-router.get('/orders', (req, res) => OrderController.getAllOrders(req, res));
+// Filter orders for a specific account via body or query (no pagination if not provided)
+router.post('/accounts/:accountId/orders/filter', (req, res) => OrderController.filterOrders(req, res));
 
-// Filter via body or query (no pagination if not provided)
-router.post('/orders/filter', (req, res) => OrderController.filterOrders(req, res));
+// Convenience lists for specific account (must come before /orders/:id to avoid conflicts)
+router.get('/accounts/:accountId/orders/pending', (req, res) => OrderController.getPendingOrders(req, res));
+router.get('/accounts/:accountId/orders/placed', (req, res) => OrderController.getPlacedOrders(req, res));
+router.get('/accounts/:accountId/orders/filled', (req, res) => OrderController.getFilledOrders(req, res));
+router.get('/accounts/:accountId/orders/cancelled', (req, res) => OrderController.getCancelledOrders(req, res));
+router.get('/accounts/:accountId/orders/rejected', (req, res) => OrderController.getRejectedOrders(req, res));
 
-// Get orders by account
+// Get orders by status for a specific account
+router.get('/accounts/:accountId/orders/status/:status', (req, res) => OrderController.getOrdersByStatus(req, res));
+
+// Get one order by id for a specific account (must come after specific routes)
+router.get('/accounts/:accountId/orders/:id', (req, res) => OrderController.getOrderById(req, res));
+
+// Legacy route - redirects to the new account-specific route
 router.get('/accounts/:accountId/orders', (req, res) => OrderController.getOrdersByAccount(req, res));
-
-// Get orders by status (optionally by account via ?accountId=)
-router.get('/orders/status/:status', (req, res) => OrderController.getOrdersByStatus(req, res));
-
-// Convenience lists
-router.get('/orders/placed', (req, res) => OrderController.getPlacedOrders(req, res));
-router.get('/orders/filled', (req, res) => OrderController.getFilledOrders(req, res));
-router.get('/orders/cancelled', (req, res) => OrderController.getCancelledOrders(req, res));
 
 // Orders by instrument for an account
 router.get('/accounts/:accountId/instruments/:instrumentId/orders', (req, res) => OrderController.getOrdersByInstrument(req, res));

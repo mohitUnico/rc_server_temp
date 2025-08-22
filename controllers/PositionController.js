@@ -45,6 +45,24 @@ class PositionController {
 		}
 	}
 
+	// Get closed positions by account (history)
+	static async getClosedByAccount(req, res) {
+		try {
+			logger.info('getClosedByAccount called with params:', req.params);
+			const { accountId } = req.params;
+			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
+			
+			logger.info(`Fetching closed positions for account: ${accountId}`);
+			const positions = await positionRepository.findClosedPositionsByAccountId(accountId);
+			logger.info(`Found ${positions.length} closed positions for account: ${accountId}`);
+			
+			return res.json(positions);
+		} catch (error) {
+			logger.error('getClosedByAccount failed', error);
+			return res.status(400).json({ error: error.message });
+		}
+	}
+
 	// Modify position SL/TP
 	static async modify(req, res) {
 		try {
