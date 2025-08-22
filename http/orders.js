@@ -35,9 +35,6 @@ router.get('/accounts/:accountId/orders/status/:status', (req, res) => OrderCont
 // Get one order by id for a specific account (must come after specific routes)
 router.get('/accounts/:accountId/orders/:id', (req, res) => OrderController.getOrderById(req, res));
 
-// Legacy route - redirects to the new account-specific route
-router.get('/accounts/:accountId/orders', (req, res) => OrderController.getOrdersByAccount(req, res));
-
 // Orders by instrument for an account
 router.get('/accounts/:accountId/instruments/:instrumentId/orders', (req, res) => OrderController.getOrdersByInstrument(req, res));
 

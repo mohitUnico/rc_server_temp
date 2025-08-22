@@ -12,7 +12,7 @@ class PositionController {
 			if (!id) return res.status(400).json({ error: 'id is required' });
 			const position = await positionRepository.findPositionById(id);
 			if (!position) return res.status(404).json({ error: 'Position not found' });
-			return res.json(position);
+			return res.json({ data: position });
 		} catch (error) {
 			logger.error('getById failed', error);
 			return res.status(400).json({ error: error.message });
@@ -25,7 +25,7 @@ class PositionController {
 			const { accountId } = req.params;
 			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
 			const positions = await positionRepository.findPositionsByAccountId(accountId);
-			return res.json(positions);
+			return res.json({ data: positions || [] });
 		} catch (error) {
 			logger.error('getByAccount failed', error);
 			return res.status(400).json({ error: error.message });
@@ -38,7 +38,7 @@ class PositionController {
 			const { accountId } = req.params;
 			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
 			const positions = await positionRepository.findOpenPositionsByAccountId(accountId);
-			return res.json(positions);
+			return res.json({ data: positions || [] });
 		} catch (error) {
 			logger.error('getOpenByAccount failed', error);
 			return res.status(400).json({ error: error.message });
@@ -56,7 +56,7 @@ class PositionController {
 			const positions = await positionRepository.findClosedPositionsByAccountId(accountId);
 			logger.info(`Found ${positions.length} closed positions for account: ${accountId}`);
 			
-			return res.json(positions);
+			return res.json({ data: positions || [] });
 		} catch (error) {
 			logger.error('getClosedByAccount failed', error);
 			return res.status(400).json({ error: error.message });

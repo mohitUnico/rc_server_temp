@@ -180,7 +180,7 @@ class OrderController {
 			};
 
 			const updated = await orderRepository.modifyOrder(id, updates);
-			return res.json(updated);
+			return res.json({ data: updated });
 		} catch (error) {
 			logger.error('modifyOrder failed', error);
 			return res.status(400).json({ error: error.message });
@@ -212,7 +212,7 @@ class OrderController {
 			}
 
 			const cancelled = await orderRepository.cancelOrder(id);
-			return res.json(cancelled);
+			return res.json({ data: cancelled });
 		} catch (error) {
 			logger.error('cancelOrder failed', error);
 			return res.status(400).json({ error: error.message });
@@ -274,7 +274,7 @@ class OrderController {
 				return res.status(403).json({ error: 'Access denied: Order does not belong to this account' });
 			}
 
-			return res.json(order);
+			return res.json({ data: order });
 		} catch (error) {
 			logger.error('getOrderById failed', error);
 			return res.status(400).json({ error: error.message });
@@ -298,7 +298,8 @@ class OrderController {
 			if (req.query.instrumentId) filters.instrument_id = req.query.instrumentId;
 
 			const result = await orderRepository.getOrdersWithPagination(page, limit, filters);
-			return res.json(result);
+			// Return just the orders array, not the pagination object
+			return res.json({ data: result.orders || [] });
 		} catch (error) {
 			logger.error('getAllOrders failed', error);
 			return res.status(400).json({ error: error.message });
@@ -313,7 +314,7 @@ class OrderController {
 			const { accountId } = req.params;
 			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
 			const orders = await orderRepository.findOrdersByAccountId(accountId);
-			return res.json(orders);
+			return res.json({ data: orders || [] });
 		} catch (error) {
 			logger.error('getOrdersByAccount failed', error);
 			return res.status(400).json({ error: error.message });
@@ -329,7 +330,7 @@ class OrderController {
 			if (!status) return res.status(400).json({ error: 'status is required' });
 			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
 			const orders = await orderRepository.findOrdersByStatus(status, accountId);
-			return res.json(orders);
+			return res.json({ data: orders || [] });
 		} catch (error) {
 			logger.error('getOrdersByStatus failed', error);
 			return res.status(400).json({ error: error.message });
@@ -344,7 +345,7 @@ class OrderController {
 			const { accountId } = req.params;
 			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
 			const orders = await orderRepository.findPendingOrders(accountId);
-			return res.json(orders);
+			return res.json({ data: orders || [] });
 		} catch (error) {
 			logger.error('getPendingOrders failed', error);
 			return res.status(400).json({ error: error.message });
@@ -356,7 +357,7 @@ class OrderController {
 			const { accountId } = req.params;
 			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
 			const orders = await orderRepository.findPlacedOrders(accountId);
-			return res.json(orders);
+			return res.json({ data: orders || [] });
 		} catch (error) {
 			logger.error('getPlacedOrders failed', error);
 			return res.status(400).json({ error: error.message });
@@ -368,7 +369,7 @@ class OrderController {
 			const { accountId } = req.params;
 			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
 			const orders = await orderRepository.findFilledOrders(accountId);
-			return res.json(orders);
+			return res.json({ data: orders || [] });
 		} catch (error) {
 			logger.error('getFilledOrders failed', error);
 			return res.status(400).json({ error: error.message });
@@ -380,7 +381,7 @@ class OrderController {
 			const { accountId } = req.params;
 			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
 			const orders = await orderRepository.findCancelledOrders(accountId);
-			return res.json(orders);
+			return res.json({ data: orders || [] });
 		} catch (error) {
 			logger.error('getCancelledOrders failed', error);
 			return res.status(400).json({ error: error.message });
@@ -392,7 +393,7 @@ class OrderController {
 			const { accountId } = req.params;
 			if (!accountId) return res.status(400).json({ error: 'accountId is required' });
 			const orders = await orderRepository.findRejectedOrders(accountId);
-			return res.json(orders);
+			return res.json({ data: orders || [] });
 		} catch (error) {
 			logger.error('getRejectedOrders failed', error);
 			return res.status(400).json({ error: error.message });
@@ -409,7 +410,7 @@ class OrderController {
 				return res.status(400).json({ error: 'accountId and instrumentId are required' });
 			}
 			const orders = await orderRepository.findOrdersByInstrument(accountId, instrumentId);
-			return res.json(orders);
+			return res.json({ data: orders || [] });
 		} catch (error) {
 			logger.error('getOrdersByInstrument failed', error);
 			return res.status(400).json({ error: error.message });
@@ -427,7 +428,7 @@ class OrderController {
 				return res.status(400).json({ error: 'id and price are required' });
 			}
 			const filled = await orderRepository.fillOrder(id, price);
-			return res.json(filled);
+			return res.json({ data: filled });
 		} catch (error) {
 			logger.error('fillOrder failed', error);
 			return res.status(400).json({ error: error.message });
@@ -532,11 +533,11 @@ class OrderController {
 
 			if (page && limit) {
 				const result = await orderRepository.getOrdersWithPagination(page, limit, filters);
-				return res.json(result);
+				return res.json({ data: result.orders || [] });
 			}
 
 			const orders = await orderRepository.findAllWithInstrumentDetails(filters);
-			return res.json(orders);
+			return res.json({ data: orders });
 		} catch (error) {
 			logger.error('filterOrders failed', error);
 			return res.status(400).json({ error: error.message });

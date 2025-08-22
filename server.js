@@ -38,6 +38,7 @@ import ordersRouter from './http/orders.js';
 import positionsRouter from './http/positions.js';
 import tradesRouter from './http/trades.js';
 import tradingAccountsRouter from './http/tradingAccounts.js';
+import instrumentsRouter from './http/instruments.js';
 
 // Apply routes to app
 app.use('/http', candlestickRouter);
@@ -47,6 +48,7 @@ app.use('/http', ordersRouter);
 app.use('/http', positionsRouter);
 app.use('/http', tradesRouter);
 app.use('/http', tradingAccountsRouter);
+app.use('/http', instrumentsRouter);
 
 // Graceful shutdown handling
 let isShuttingDown = false;
