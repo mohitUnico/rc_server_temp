@@ -166,7 +166,7 @@ class AccountMetricsService {
       const currentPrice = await priceCacheService.getCurrentPriceByInstrumentId(position.instrumentId);
       
       if (!currentPrice) {
-        // logger.warn(`No current price available for instrument ${position.instrumentId}, using entry price`);
+        logger.warn(`No current price available for instrument ${position.instrumentId}, using entry price`);
         // If no current price, use entry price (no unrealized P&L)
         return {
           unrealizedPnL: 0,

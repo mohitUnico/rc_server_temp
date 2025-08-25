@@ -129,8 +129,7 @@ class FreeMarginMonitorService {
       
       if (openPositions.length === 0) {
         logger.info(`No open positions found for account ${account.accountUid}`);
-        // Set free margin to threshold value
-        await this.updateAccountFreeMargin(account.accountUid, this.marginThreshold);
+        // Don't manually set free margin - let it be recalculated naturally
         return;
       }
 
@@ -141,8 +140,8 @@ class FreeMarginMonitorService {
         await this.closePositionAtMarketPrice(position);
       }
 
-      // After closing positions, set free margin to threshold value
-      await this.updateAccountFreeMargin(account.accountUid, this.marginThreshold);
+      // Don't manually set free margin - let it be recalculated naturally after positions are closed
+      // The account's free margin should be updated by the position closing logic
 
       logger.info(`Successfully closed all positions for account ${account.accountUid}`);
     } catch (error) {
