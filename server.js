@@ -46,11 +46,11 @@ import instrumentsRouter from './http/instruments.js';
 app.use('/http', candlestickRouter);
 app.use('/http', quoteRouter);
 app.use('/http', tradingCredentialsRouter);
-app.use('/http', ordersRouter);
-app.use('/http', positionsRouter);
-app.use('/http', tradesRouter);
-app.use('/http', tradingAccountsRouter);
-app.use('/http', instrumentsRouter);
+app.use('/', ordersRouter);
+app.use('/', positionsRouter);
+app.use('/', tradesRouter);
+app.use('/', tradingAccountsRouter);
+app.use('/', instrumentsRouter);
 
 // Graceful shutdown handling
 let isShuttingDown = false;
