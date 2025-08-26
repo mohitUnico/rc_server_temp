@@ -108,7 +108,7 @@ class OrderController {
 					executedPrice: currentPrice 
 				});
 			} else {
-				// For non-market orders (limit, stop, etc.), place as pending with price = null
+				// For non-market orders (limit, stop, etc.), mark as placed with price = null
 				const orderData = {
 					account_id: accountId,
 					instrument_id: instrumentId,
@@ -118,14 +118,14 @@ class OrderController {
 					sl_price: sl,
 					tp_price: tp,
 					price: null, // Price will be set when order is filled
-					status: OrderStatus.PENDING
+					status: OrderStatus.PLACED
 				};
 
-				// Place pending order
+				// Place order as placed
 				const created = await orderRepository.placeOrder(orderData);
 				return res.status(201).json({
 					order: created,
-					message: 'Order placed as pending. Price will be set when order is filled.'
+					message: 'Order placed. Price will be set when order is filled.'
 				});
 			}
 		} catch (error) {
