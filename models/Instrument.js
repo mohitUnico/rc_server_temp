@@ -12,6 +12,11 @@ class Instrument {
     this.category = data.instrument_category || null;
     this.status = data.instrument_status || InstrumentStatus.ACTIVE;
     this.description = data.description || '';
+    this.contractSize = data.contract_size || null;
+    this.pipSize = data.pip_size || null;
+    this.minLotSize = data.min_lot_size || null;
+    this.maxLotSize = data.max_lot_size || null;
+    this.pipValue = data.pip_value || null;
     this.createdAt = data.created_at || new Date();
     this.updatedAt = data.updated_at || new Date();
   }
@@ -27,6 +32,11 @@ class Instrument {
       instrument_category: this.category,
       instrument_status: this.status,
       description: this.description,
+      contract_size: this.contractSize,
+      pip_size: this.pipSize,
+      min_lot_size: this.minLotSize,
+      max_lot_size: this.maxLotSize,
+      pip_value: this.pipValue,
       created_at: this.createdAt,
       updated_at: this.updatedAt
     };

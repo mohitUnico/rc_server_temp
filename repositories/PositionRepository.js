@@ -295,13 +295,17 @@ class PositionRepository extends BaseRepository {
         id: instrument?.id,
         symbol: instrument?.symbol,
         category: instrument?.category,
-        name: instrument?.name
+        name: instrument?.name,
+        contractSize: instrument?.contractSize
       });
       
-      // Determine contract size based on instrument category (matching Flutter app)
+      // Use the contract_size from the database, fallback to category-based defaults
       let contractSize = 100000.0; // Default for Forex
-      if (instrument && instrument.category) {
-        console.log(`Instrument category: "${instrument.category}"`);
+      if (instrument && instrument.contractSize) {
+        contractSize = instrument.contractSize;
+        console.log(`Using contract size from database: ${contractSize}`);
+      } else if (instrument && instrument.category) {
+        console.log(`No contract_size in database, using category-based default for: "${instrument.category}"`);
         switch (instrument.category) {
           case InstrumentCategory.FOREX:
             contractSize = 100000.0;
@@ -322,12 +326,6 @@ class PositionRepository extends BaseRepository {
         }
       } else {
         console.log('No instrument found or no category, using default contract size: 100000.0');
-      }
-      
-      // Special handling for XAUUSD (Gold) - check symbol as fallback
-      if (instrument && instrument.symbol && instrument.symbol.toUpperCase() === 'XAUUSD') {
-        contractSize = 100.0;
-        console.log('XAUUSD detected, overriding contract size to: 100.0');
       }
 
       console.log(`Calculating PnL for position ${position.id}:`);
