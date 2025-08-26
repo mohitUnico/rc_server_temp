@@ -115,6 +115,7 @@ export class WebSocketManager {
             const raw = typeof data === 'string' ? data : data.toString();
             const message = JSON.parse(raw);
 
+            // Skip ping/pong messages
             if (message.resAc === 'ping' || message.resAc === 'pong') return;
 
             // Notify all registered handlers

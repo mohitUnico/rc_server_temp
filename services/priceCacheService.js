@@ -13,6 +13,122 @@ class PriceCacheService {
       crypto: new Map(),
       indices: new Map()
     };
+
+    // Track forex symbol statistics
+    this.forexStats = {
+      totalSymbols: 0,
+      activeSymbols: 0,
+      lastUpdate: null
+    };
+
+    // Start periodic logging of forex price cache
+    this.startPeriodicLogging();
+  }
+
+  /**
+   * Start periodic logging of forex price cache every minute
+   */
+  startPeriodicLogging() {
+    // Log every minute (60000ms)
+    this.loggingInterval = setInterval(() => {
+      this.logForexPriceCache();
+    }, 60000);
+
+    logger.info('Started periodic logging of forex price cache every minute');
+  }
+
+  /**
+   * Stop periodic logging
+   */
+  stopPeriodicLogging() {
+    if (this.loggingInterval) {
+      clearInterval(this.loggingInterval);
+      this.loggingInterval = null;
+      logger.info('Stopped periodic logging of forex price cache');
+    }
+  }
+
+  /**
+   * Log the current state of forex price cache to terminal
+   */
+  logForexPriceCache() {
+    try {
+      const now = new Date().toISOString();
+      const forexPrices = this.getAllPrices('forex');
+      const symbolCount = Object.keys(forexPrices).length;
+
+      if (symbolCount === 0) {
+        console.log(`\n[${now}] 📊 Forex Price Cache: No symbols cached yet`);
+        return;
+      }
+
+      console.log(`\n[${now}] 📊 Forex Price Cache Status (${symbolCount} symbols):`);
+      console.log('─'.repeat(80));
+
+      // Group symbols by price ranges for better readability
+      const priceRanges = {
+        '0.1-1.0': [],
+        '1.0-10.0': [],
+        '10.0-100.0': [],
+        '100.0+': []
+      };
+
+      Object.entries(forexPrices).forEach(([symbol, priceData]) => {
+        const { price, age } = priceData;
+        const ageSeconds = Math.round(age / 1000);
+        const status = age < 10000 ? '🟢' : age < 30000 ? '🟡' : '🔴';
+
+        if (price < 1.0) priceRanges['0.1-1.0'].push({ symbol, price, ageSeconds, status });
+        else if (price < 10.0) priceRanges['1.0-10.0'].push({ symbol, price, ageSeconds, status });
+        else if (price < 100.0) priceRanges['10.0-100.0'].push({ symbol, price, ageSeconds, status });
+        else priceRanges['100.0+'].push({ symbol, price, ageSeconds, status });
+      });
+
+      // Log each price range
+      Object.entries(priceRanges).forEach(([range, symbols]) => {
+        if (symbols.length > 0) {
+          console.log(`\n${range} (${symbols.length} symbols):`);
+          symbols.forEach(({ symbol, price, ageSeconds, status }) => {
+            const formattedPrice = price.toFixed(5);
+            console.log(`  ${status} ${symbol}: ${formattedPrice} (${ageSeconds}s old)`);
+          });
+        }
+      });
+
+      // Log summary statistics
+      const activeCount = Object.values(forexPrices).filter(p => p.age < 10000).length;
+      const warningCount = Object.values(forexPrices).filter(p => p.age >= 10000 && p.age < 30000).length;
+      const staleCount = Object.values(forexPrices).filter(p => p.age >= 30000).length;
+
+      console.log('\n─'.repeat(80));
+      console.log(`📈 Summary: Active: ${activeCount} | Warning: ${warningCount} | Stale: ${staleCount}`);
+      console.log(`🕒 Last Update: ${this.forexStats.lastUpdate || 'Never'}`);
+      console.log(`💾 Memory Usage: ${this.getMemoryUsageInfo()}`);
+
+    } catch (error) {
+      logger.error('Error logging forex price cache:', error);
+    }
+  }
+
+  /**
+   * Get memory usage information for the cache
+   */
+  getMemoryUsageInfo() {
+    try {
+      const memUsage = process.memoryUsage();
+      const rssMB = Math.round(memUsage.rss / 1024 / 1024);
+      const heapMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+      return `RSS: ${rssMB}MB | Heap: ${heapMB}MB`;
+    } catch (error) {
+      return 'Unknown';
+    }
+  }
+
+  /**
+   * Manually trigger forex price cache logging (for testing/debugging)
+   */
+  triggerForexLogging() {
+    this.logForexPriceCache();
   }
 
   /**
@@ -31,11 +147,35 @@ class PriceCacheService {
       };
 
       this.priceCache[assetType].set(symbol, priceData);
-      
-      logger.debug(`Updated price for ${symbol} (${assetType}): ${price}`);
+
+      // Special handling for forex symbols
+      if (assetType === 'forex') {
+        this.updateForexStats(symbol, priceData);
+        logger.debug(`Updated forex price for ${symbol}: ${price} (${this.priceCache.forex.size} symbols cached)`);
+      } else {
+        logger.debug(`Updated price for ${symbol} (${assetType}): ${price}`);
+      }
     } catch (error) {
       logger.error(`Error updating price for ${symbol} (${assetType}):`, error);
     }
+  }
+
+  /**
+   * Update forex-specific statistics
+   */
+  updateForexStats(symbol, priceData) {
+    this.forexStats.totalSymbols = this.priceCache.forex.size;
+    this.forexStats.lastUpdate = new Date().toISOString();
+
+    // Count active symbols (prices less than 10 seconds old)
+    const now = Date.now();
+    let activeCount = 0;
+    for (const [sym, data] of this.priceCache.forex.entries()) {
+      if (now - data.timestamp < 10000) { // 10 seconds
+        activeCount++;
+      }
+    }
+    this.forexStats.activeSymbols = activeCount;
   }
 
   /**
@@ -52,10 +192,12 @@ class PriceCacheService {
         return null;
       }
 
-      // Check if price is stale (older than 5 seconds)
+      // Check if price is stale (older than 10 seconds for forex, 5 seconds for others)
       const now = Date.now();
       const age = now - priceData.timestamp;
-      if (age > 5000) {
+      const staleThreshold = assetType === 'forex' ? 10000 : 5000;
+
+      if (age > staleThreshold) {
         logger.warn(`Price for ${symbol} (${assetType}) is stale (${age}ms old)`);
         return null;
       }
@@ -76,7 +218,7 @@ class PriceCacheService {
       // Import here to avoid circular dependencies
       const InstrumentRepository = (await import('../repositories/InstrumentRepository.js')).default;
       const instrumentRepository = new InstrumentRepository();
-      
+
       const instrument = await instrumentRepository.findInstrumentById(instrumentId);
       if (!instrument) {
         logger.warn(`Instrument with ID ${instrumentId} not found`);
@@ -84,7 +226,7 @@ class PriceCacheService {
       }
 
       const { symbol } = instrument;
-      
+
       // Auto-detect asset type based on symbol pattern
       let assetType;
       if (symbol.includes('USDT') || symbol.includes('BTC') || symbol.includes('ETH')) {
@@ -135,7 +277,7 @@ class PriceCacheService {
   getAllPricesAllTypes() {
     try {
       const allPrices = {};
-      
+
       for (const assetType of ['forex', 'crypto', 'indices']) {
         allPrices[assetType] = this.getAllPrices(assetType);
       }
@@ -144,6 +286,38 @@ class PriceCacheService {
     } catch (error) {
       logger.error('Error getting all prices:', error);
       return {};
+    }
+  }
+
+  /**
+   * Get detailed forex price information
+   */
+  getForexPrices() {
+    try {
+      const forexPrices = this.getAllPrices('forex');
+      const now = Date.now();
+
+      // Add additional metadata for forex prices
+      const detailedPrices = {};
+      for (const [symbol, priceData] of Object.entries(forexPrices)) {
+        const age = now - priceData.timestamp;
+        detailedPrices[symbol] = {
+          ...priceData,
+          age,
+          isActive: age < 10000, // Less than 10 seconds old
+          formattedPrice: priceData.price.toFixed(5)
+        };
+      }
+
+      return {
+        prices: detailedPrices,
+        stats: this.forexStats,
+        totalSymbols: Object.keys(detailedPrices).length,
+        activeSymbols: Object.values(detailedPrices).filter(p => p.isActive).length
+      };
+    } catch (error) {
+      logger.error('Error getting forex prices:', error);
+      return { prices: {}, stats: this.forexStats, totalSymbols: 0, activeSymbols: 0 };
     }
   }
 
@@ -172,7 +346,7 @@ class PriceCacheService {
       };
 
       stats.total = stats.forex + stats.crypto + stats.indices;
-      
+
       // Calculate average age of prices
       let totalAge = 0;
       let priceCount = 0;
@@ -188,6 +362,11 @@ class PriceCacheService {
       stats.averageAge = priceCount > 0 ? totalAge / priceCount : 0;
       stats.priceCount = priceCount;
 
+      // Add forex-specific stats
+      if (stats.forex > 0) {
+        stats.forexStats = this.forexStats;
+      }
+
       return stats;
     } catch (error) {
       logger.error('Error getting cache stats:', error);
@@ -196,20 +375,29 @@ class PriceCacheService {
   }
 
   /**
-   * Clear stale prices (older than 10 seconds)
+   * Clear stale prices (older than 15 seconds for forex, 10 seconds for others)
    */
   clearStalePrices() {
     try {
       const now = Date.now();
-      const staleThreshold = 10000; // 10 seconds
+      let clearedCount = 0;
 
       for (const assetType of ['forex', 'crypto', 'indices']) {
+        const staleThreshold = assetType === 'forex' ? 15000 : 10000; // 15s for forex, 10s for others
+
         for (const [symbol, priceData] of this.priceCache[assetType].entries()) {
           if (now - priceData.timestamp > staleThreshold) {
             this.priceCache[assetType].delete(symbol);
+            clearedCount++;
             logger.debug(`Cleared stale price for ${symbol} (${assetType})`);
           }
         }
+      }
+
+      if (clearedCount > 0) {
+        logger.info(`Cleared ${clearedCount} stale prices`);
+        // Update forex stats after clearing
+        this.updateForexStats();
       }
     } catch (error) {
       logger.error('Error clearing stale prices:', error);
@@ -226,9 +414,49 @@ class PriceCacheService {
         crypto: new Map(),
         indices: new Map()
       };
+
+      // Reset forex stats
+      this.forexStats = {
+        totalSymbols: 0,
+        activeSymbols: 0,
+        lastUpdate: null
+      };
+
       logger.info('Cleared all cached prices');
     } catch (error) {
       logger.error('Error clearing all prices:', error);
+    }
+  }
+
+  /**
+   * Get symbols with recent price updates (last 5 seconds)
+   */
+  getRecentPriceUpdates(assetType = 'forex', timeWindow = 5000) {
+    try {
+      if (!this.priceCache[assetType]) {
+        return [];
+      }
+
+      const now = Date.now();
+      const recentUpdates = [];
+
+      for (const [symbol, priceData] of this.priceCache[assetType].entries()) {
+        if (now - priceData.timestamp <= timeWindow) {
+          recentUpdates.push({
+            symbol,
+            price: priceData.price,
+            timestamp: priceData.timestamp,
+            age: now - priceData.timestamp
+          });
+        }
+      }
+
+      // Sort by most recent first
+      recentUpdates.sort((a, b) => b.timestamp - a.timestamp);
+      return recentUpdates;
+    } catch (error) {
+      logger.error(`Error getting recent price updates for ${assetType}:`, error);
+      return [];
     }
   }
 }
