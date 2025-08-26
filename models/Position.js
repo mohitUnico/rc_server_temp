@@ -96,17 +96,18 @@ class Position {
   }
 
   /**
-   * Calculate current P&L based on current price
+   * Calculate current P&L based on current price (matching Flutter _calculateRealtimePnL)
    */
-  calculatePnL(currentPrice) {
-    if (!currentPrice || currentPrice <= 0) {
-      return this.pnl;
+  calculatePnL(currentPrice, contractSize = 100000.0) {
+    if (!currentPrice) {
+      return this.pnl; // Return stored PnL if no current price
     }
 
-    const priceDifference = currentPrice - this.entryPrice;
-    const multiplier = this.positionType === PositionType.BUY ? 1 : -1;
-    
-    return (priceDifference * multiplier * this.lotSize);
+    if (this.positionType === PositionType.BUY) {
+      return (currentPrice - this.entryPrice) * this.lotSize * contractSize;
+    } else {
+      return (this.entryPrice - currentPrice) * this.lotSize * contractSize;
+    }
   }
 
   /**

@@ -279,13 +279,19 @@ class PositionRepository extends BaseRepository {
   }
 
   /**
-   * Calculate PnL for a position (matching Flutter _calculatePnL)
+   * Calculate PnL for a position (matching Flutter _calculateRealtimePnL)
    */
-  async calculatePnL(position, exitPrice) {
+  async calculatePnL(position, currentPrice) {
     try {
-      // Get the instrument to get the actual contract size
+      // Return stored PnL if no current price
+      if (!currentPrice) {
+        return position.pnl;
+      }
+
+      // Get the instrument to get the contract size
       const instrument = await this.instrumentRepository.findInstrumentById(position.instrumentId);
-      // Determine contract size based on instrument category
+      
+      // Determine contract size based on instrument category (matching Flutter app)
       let contractSize = 100000.0; // Default for Forex
       if (instrument && instrument.category) {
         switch (instrument.category) {
@@ -306,29 +312,29 @@ class PositionRepository extends BaseRepository {
 
       console.log(`Calculating PnL for position ${position.id}:`);
       console.log(`  Entry price: ${position.entryPrice}`);
-      console.log(`  Exit price: ${exitPrice}`);
+      console.log(`  Current price: ${currentPrice}`);
       console.log(`  Position type: ${position.positionType}`);
       console.log(`  Lot size: ${position.lotSize}`);
       console.log(`  Contract size: ${contractSize}`);
 
       let pnl;
       if (position.positionType === 'buy') {
-        pnl = (exitPrice - position.entryPrice) * position.lotSize * contractSize;
+        pnl = (currentPrice - position.entryPrice) * position.lotSize * contractSize;
       } else {
-        pnl = (position.entryPrice - exitPrice) * position.lotSize * contractSize;
+        pnl = (position.entryPrice - currentPrice) * position.lotSize * contractSize;
       }
 
       console.log(`  Calculated PnL: ${pnl}`);
       return pnl;
     } catch (error) {
       console.error('Error calculating PnL:', error);
-      // Fallback to simplified calculation
-      const contractSize = 100000.0; // Default contract size
+      // Fallback to simplified calculation with default contract size
+      const contractSize = 100000.0;
 
       if (position.positionType === 'buy') {
-        return (exitPrice - position.entryPrice) * position.lotSize * contractSize;
+        return (currentPrice - position.entryPrice) * position.lotSize * contractSize;
       } else {
-        return (position.entryPrice - exitPrice) * position.lotSize * contractSize;
+        return (position.entryPrice - currentPrice) * position.lotSize * contractSize;
       }
     }
   }
