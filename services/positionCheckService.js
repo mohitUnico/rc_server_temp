@@ -78,6 +78,12 @@ class PositionCheckService {
    */
   async checkPosition(position) {
     try {
+      // Skip positions that don't have SL or TP values set
+      if (!position.slPrice && !position.tpPrice) {
+        logger.debug(`Skipping position ${position.id} - no SL or TP values set (SL: ${position.slPrice}, TP: ${position.tpPrice})`);
+        return;
+      }
+
       // Get current price for the instrument from WebSocket cache
       const currentPrice = await priceCacheService.getCurrentPriceByInstrumentId(position.instrumentId);
       
