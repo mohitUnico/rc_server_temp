@@ -129,7 +129,8 @@ class FreeMarginMonitorService {
       
       if (openPositions.length === 0) {
         logger.info(`No open positions found for account ${account.accountUid}`);
-        // Don't manually set free margin - let it be recalculated naturally
+        // Set balance to 0 since free margin is 0 and no positions to close
+        await this.setAccountBalanceToZero(account.accountUid);
         return;
       }
 
@@ -140,8 +141,8 @@ class FreeMarginMonitorService {
         await this.closePositionAtMarketPrice(position);
       }
 
-      // Don't manually set free margin - let it be recalculated naturally after positions are closed
-      // The account's free margin should be updated by the position closing logic
+      // Set balance to 0 after closing all positions since free margin reached 0
+      await this.setAccountBalanceToZero(account.accountUid);
 
       logger.info(`✅ Successfully closed all positions for account ${account.accountUid} due to free margin protection`);
     } catch (error) {
@@ -212,6 +213,24 @@ class FreeMarginMonitorService {
   setMarginThreshold(threshold) {
     this.marginThreshold = threshold;
     logger.info(`Updated margin threshold to: ${threshold}`);
+  }
+
+  /**
+   * Set account balance to 0 when free margin reaches 0
+   */
+  async setAccountBalanceToZero(accountUid) {
+    try {
+      logger.info(`🚨 FREE MARGIN CRITICAL: Setting balance to 0 for account ${accountUid} due to zero free margin`);
+      
+      await tradingAccountRepository.setBalanceWithUid({ 
+        accountUid, 
+        newBalance: 0 
+      });
+      
+      logger.info(`✅ Successfully set balance to 0 for account ${accountUid}`);
+    } catch (error) {
+      logger.error(`Error setting balance to 0 for account ${accountUid}:`, error);
+    }
   }
 
   /**
