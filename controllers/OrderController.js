@@ -88,9 +88,8 @@ class OrderController {
 					fee: null
 				});
 
-				// 4) Create position with calculated margin
+				// 4) Create position
 				const positionType = side === 'buy' ? PositionType.BUY : PositionType.SELL;
-				const marginUsed = req.marginValidation?.requiredMargin || 0; // Use calculated margin from validation
 				const position = await positionRepository.createPosition({
 					accountId: accountId,
 					instrumentId: instrumentId,
@@ -99,7 +98,7 @@ class OrderController {
 					entryPrice: currentPrice,
 					slPrice: sl,
 					tpPrice: tp,
-					marginUsed: marginUsed
+					marginUsed: 0
 				});
 
 				return res.status(201).json({ 
@@ -489,9 +488,8 @@ class OrderController {
 				fee: null
 			});
 
-			// 4) Create position with calculated margin
+			// 4) Create position
 			const positionType = side === 'buy' ? PositionType.BUY : PositionType.SELL;
-			const marginUsed = req.marginValidation?.requiredMargin || 0; // Use calculated margin from validation
 			const position = await positionRepository.createPosition({
 				accountId: accountId,
 				instrumentId: instrumentId,
@@ -500,7 +498,7 @@ class OrderController {
 				entryPrice: finalPrice,
 				slPrice: sl,
 				tpPrice: tp,
-				marginUsed: marginUsed
+				marginUsed: 0 // optionally compute margin here if needed
 			});
 
 			return res.status(201).json({ 
@@ -605,9 +603,8 @@ class OrderController {
 				fee: null
 			});
 
-			// 4) Create position with calculated margin
+			// 4) Create position
 			const positionType = side === 'buy' ? PositionType.BUY : PositionType.SELL;
-			const marginUsed = req.marginValidation?.requiredMargin || 0; // Use calculated margin from validation
 			const position = await positionRepository.createPosition({
 				accountId: accountId,
 				instrumentId: instrumentId,
@@ -616,7 +613,7 @@ class OrderController {
 				entryPrice: currentPrice,
 				slPrice: sl,
 				tpPrice: tp,
-				marginUsed: marginUsed
+				marginUsed: 0
 			});
 
 			return res.status(201).json({ 
