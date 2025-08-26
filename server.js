@@ -147,8 +147,8 @@ async function startServer() {
             
             // Start trading monitor services
             try {
-                // positionCheckService.start();
-                // logger.info('✅ Position check service started');
+                positionCheckService.start();
+                logger.info('✅ Position check service started');
                 
                 pendingOrderService.start();
                 logger.info('✅ Pending order service started');
@@ -156,8 +156,8 @@ async function startServer() {
                 accountMetricsService.start();
                 logger.info('✅ Account metrics service started');
                 
-                // freeMarginMonitorService.start();
-                // logger.info('✅ Free margin monitor service started');
+                freeMarginMonitorService.start();
+                logger.info('✅ Free margin monitor service started');
                 
                 // Start instrument cache auto-refresh (every 5 minutes)
                 instrumentCacheService.startAutoRefresh(300000);
@@ -171,7 +171,7 @@ async function startServer() {
                 
                 logger.info('🎯 Trading monitor services: Position & Order monitoring active (using WebSocket prices)');
                 logger.info('📊 Account metrics service: Real-time equity, margin, and free margin updates active');
-                logger.info('🛡️ Free margin monitor service: DISABLED - Automatic position closure disabled for testing');
+                logger.info('🛡️ Free margin monitor service: ENABLED - Automatic position closure active');
                 logger.info('📈 Instrument cache service: In-memory caching with auto-refresh every 5 minutes');
             } catch (error) {
                 logger.error('❌ Failed to start trading monitor services:', error);
