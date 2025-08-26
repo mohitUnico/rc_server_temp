@@ -7,6 +7,7 @@ import Position from '../models/Position.js';
 import { PositionStatus } from '../enums/positionEnums.js';
 import TradingAccountRepository from './TradingAccountRepository.js';
 import InstrumentRepository from './InstrumentRepository.js';
+import { InstrumentCategory } from '../enums/instrumentEnums.js';
 
 class PositionRepository extends BaseRepository {
   constructor() {
@@ -284,7 +285,24 @@ class PositionRepository extends BaseRepository {
     try {
       // Get the instrument to get the actual contract size
       const instrument = await this.instrumentRepository.findInstrumentById(position.instrumentId);
-      const contractSize = instrument?.contractSize || 100000.0; // Default fallback
+      // Determine contract size based on instrument category
+      let contractSize = 100000.0; // Default for Forex
+      if (instrument && instrument.category) {
+        switch (instrument.category) {
+          case InstrumentCategory.FOREX:
+            contractSize = 100000.0;
+            break;
+          case InstrumentCategory.METAL: // Gold
+            contractSize = 100.0;
+            break;
+          case InstrumentCategory.CRYPTO:
+            contractSize = 1.0;
+            break;
+          default:
+            contractSize = 1.0;
+            break;
+        }
+      }
 
       console.log(`Calculating PnL for position ${position.id}:`);
       console.log(`  Entry price: ${position.entryPrice}`);
