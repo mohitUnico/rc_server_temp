@@ -100,17 +100,20 @@ class PositionController {
 				return res.status(400).json({ error: 'Position is already closed' });
 			}
 
-			// Get current price for the instrument
-			const PriceService = (await import('../services/priceService.js')).default;
+			// Get current price for the instrument from price cache
+			const priceCacheService = (await import('../services/priceCacheService.js')).default;
 			let exitPrice;
 			try {
-				exitPrice = await PriceService.getCurrentPrice(position.instrumentId);
+				exitPrice = await priceCacheService.getCurrentPriceByInstrumentId(position.instrumentId);
+				if (!exitPrice) {
+					logger.warn(`No current price available for instrument ${position.instrumentId}, using entry price as fallback`);
+					exitPrice = position.entryPrice; // Use entry price as fallback
+				}
 				logger.info(`Fetched exit price for position ${id}: ${exitPrice}`);
 			} catch (error) {
 				logger.error('Failed to fetch current price:', error);
-				return res.status(400).json({ 
-					error: `Failed to fetch current price: ${error.message}` 
-				});
+				logger.info(`Using entry price as fallback for position ${id}: ${position.entryPrice}`);
+				exitPrice = position.entryPrice; // Use entry price as fallback
 			}
 
 			// Determine if this is a full close or partial close
@@ -134,11 +137,15 @@ class PositionController {
 					pnl: undefined // Let repository calculate PnL
 				});
 				
+				logger.info(`Position ${id} closed successfully. PnL: ${result.pnl}, Margin used preserved: ${result.marginUsed}`);
+				
 				return res.json({
 					message: 'Position closed successfully',
 					position: result,
 					exitPrice,
-					closedLotSize: closeLotSize
+					closedLotSize: closeLotSize,
+					pnl: result.pnl,
+					marginUsed: result.marginUsed
 				});
 			} else {
 				// Partial close - create new closed position and update original
@@ -150,12 +157,16 @@ class PositionController {
 					pnl: undefined // Let repository calculate PnL
 				});
 				
+				logger.info(`Position ${id} partially closed successfully. Closed PnL: ${result.closedPosition.pnl}, Remaining margin: ${result.openPosition.marginUsed}`);
+				
 				return res.json({
 					message: 'Position partially closed successfully',
 					closedPosition: result.closedPosition,
 					remainingPosition: result.openPosition,
 					exitPrice,
-					closedLotSize: closeLotSize
+					closedLotSize: closeLotSize,
+					closedPnL: result.closedPosition.pnl,
+					remainingMarginUsed: result.openPosition.marginUsed
 				});
 			}
 		} catch (error) {

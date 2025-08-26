@@ -31,7 +31,7 @@ class OrderController {
 				limitValue = null,
 				sl = null,
 				tp = null,
-				status = OrderStatus.PENDING
+				status = OrderStatus.PLACED
 			} = req.body || {};
 
 			if (!accountId || !instrumentId || !orderType || !lotSize) {

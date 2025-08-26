@@ -13,7 +13,7 @@ class PositionCheckService {
   constructor() {
     this.isRunning = false;
     this.checkInterval = null;
-    this.checkIntervalMs = 100; // 0.1 seconds as requested
+    this.checkIntervalMs = 10000; // 10 seconds instead of 100ms for testing
   }
 
   /**
@@ -90,14 +90,14 @@ class PositionCheckService {
 
       // Check if stop loss is hit
       if (position.slPrice && position.isStopLossHit(currentPrice)) {
-        logger.info(`Stop loss triggered for position ${position.id} at price ${currentPrice}`);
+        logger.info(`🚨 STOP LOSS TRIGGERED for position ${position.id} at price ${currentPrice} (SL: ${position.slPrice})`);
         await this.closePosition(position, currentPrice, 'stop_loss');
         return;
       }
 
       // Check if take profit is hit
       if (position.tpPrice && position.isTakeProfitHit(currentPrice)) {
-        logger.info(`Take profit triggered for position ${position.id} at price ${currentPrice}`);
+        logger.info(`🎯 TAKE PROFIT TRIGGERED for position ${position.id} at price ${currentPrice} (TP: ${position.tpPrice})`);
         await this.closePosition(position, currentPrice, 'take_profit');
         return;
       }

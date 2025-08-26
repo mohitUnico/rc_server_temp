@@ -122,7 +122,7 @@ class FreeMarginMonitorService {
    */
   async closeAllPositionsForAccount(account) {
     try {
-      logger.info(`Closing all positions for account ${account.accountUid} due to low free margin`);
+      logger.info(`🚨 FREE MARGIN CRITICAL: Closing all positions for account ${account.accountUid} due to low free margin`);
 
       // Get all open positions for this account
       const openPositions = await positionRepository.findOpenPositionsByAccountId(account.accountUid);
@@ -133,7 +133,7 @@ class FreeMarginMonitorService {
         return;
       }
 
-      logger.info(`Found ${openPositions.length} open positions to close for account ${account.accountUid}`);
+      logger.info(`🚨 FREE MARGIN CRITICAL: Found ${openPositions.length} open positions to close for account ${account.accountUid}`);
 
       // Close each position with current market price
       for (const position of openPositions) {
@@ -143,7 +143,7 @@ class FreeMarginMonitorService {
       // Don't manually set free margin - let it be recalculated naturally after positions are closed
       // The account's free margin should be updated by the position closing logic
 
-      logger.info(`Successfully closed all positions for account ${account.accountUid}`);
+      logger.info(`✅ Successfully closed all positions for account ${account.accountUid} due to free margin protection`);
     } catch (error) {
       logger.error(`Error closing positions for account ${account.accountUid}:`, error);
     }

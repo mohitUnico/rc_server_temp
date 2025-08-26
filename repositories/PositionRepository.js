@@ -169,6 +169,7 @@ class PositionRepository extends BaseRepository {
         exit_price: exitPrice,
         pnl: pnl,
         status: PositionStatus.CLOSED,
+        // Keep the original margin_used value to show how much margin was used in this position
         closed_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -177,7 +178,7 @@ class PositionRepository extends BaseRepository {
 
       const result = await this.updateById(positionId, updates);
       const closedPosition = Position.fromDatabase(result);
-      console.log(`Position closed successfully. Saved PnL: ${closedPosition.pnl}`);
+      console.log(`Position closed successfully. Saved PnL: ${closedPosition.pnl}, Margin used preserved: ${closedPosition.marginUsed}`);
 
       // Update account balance with the PnL
       console.log(`Updating balance for account ${position.accountId} with PnL ${pnl}`);
