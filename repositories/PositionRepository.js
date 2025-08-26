@@ -158,7 +158,7 @@ class PositionRepository extends BaseRepository {
       console.log(`  Position type: ${position.positionType}`);
       console.log(`  Lot size: ${position.lotSize}`);
 
-      // If PnL is not provided, calculate it
+      // If PnL is not provided, calculate it using the exit price as current price
       if (pnl === undefined) {
         pnl = await this.calculatePnL(position, exitPrice);
         console.log(`Calculated PnL: ${pnl}`);
@@ -291,23 +291,43 @@ class PositionRepository extends BaseRepository {
       // Get the instrument to get the contract size
       const instrument = await this.instrumentRepository.findInstrumentById(position.instrumentId);
       
+      console.log(`Instrument details for ${position.instrumentId}:`, {
+        id: instrument?.id,
+        symbol: instrument?.symbol,
+        category: instrument?.category,
+        name: instrument?.name
+      });
+      
       // Determine contract size based on instrument category (matching Flutter app)
       let contractSize = 100000.0; // Default for Forex
       if (instrument && instrument.category) {
+        console.log(`Instrument category: "${instrument.category}"`);
         switch (instrument.category) {
           case InstrumentCategory.FOREX:
             contractSize = 100000.0;
+            console.log('Using Forex contract size: 100000.0');
             break;
           case InstrumentCategory.METAL: // Gold
             contractSize = 100.0;
+            console.log('Using Metal contract size: 100.0');
             break;
           case InstrumentCategory.CRYPTO:
             contractSize = 1.0;
+            console.log('Using Crypto contract size: 1.0');
             break;
           default:
             contractSize = 1.0;
+            console.log(`Unknown category "${instrument.category}", using default contract size: 1.0`);
             break;
         }
+      } else {
+        console.log('No instrument found or no category, using default contract size: 100000.0');
+      }
+      
+      // Special handling for XAUUSD (Gold) - check symbol as fallback
+      if (instrument && instrument.symbol && instrument.symbol.toUpperCase() === 'XAUUSD') {
+        contractSize = 100.0;
+        console.log('XAUUSD detected, overriding contract size to: 100.0');
       }
 
       console.log(`Calculating PnL for position ${position.id}:`);
