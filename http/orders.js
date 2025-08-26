@@ -1,11 +1,11 @@
 import express from 'express';
 import OrderController from '../controllers/OrderController.js';
-import { validateNewOrderPayload, validateFreeMarginPositive } from '../validators/orderValidators.js';
+import { validateNewOrderPayload, validateFreeMarginPositive, validateSufficientMargin } from '../validators/orderValidators.js';
 
 const router = express.Router();
 
 // Create / place order
-router.post('/orders', validateNewOrderPayload, validateFreeMarginPositive, (req, res) => OrderController.placeOrder(req, res));
+router.post('/orders', validateNewOrderPayload, validateSufficientMargin, (req, res) => OrderController.placeOrder(req, res));
 
 // Modify order for a specific account
 router.put('/accounts/:accountId/orders/:id', (req, res) => OrderController.modifyOrder(req, res));
@@ -42,10 +42,10 @@ router.get('/accounts/:accountId/instruments/:instrumentId/orders', (req, res) =
 router.post('/orders/:id/fill', (req, res) => OrderController.fillOrder(req, res));
 
 // Execute market order: create order + trade + position
-router.post('/orders/execute-market', validateNewOrderPayload, validateFreeMarginPositive, (req, res) => OrderController.executeMarketOrder(req, res));
+router.post('/orders/execute-market', validateNewOrderPayload, validateSufficientMargin, (req, res) => OrderController.executeMarketOrder(req, res));
 
 // Place market order with automatic price fetching
-router.post('/orders/market', validateNewOrderPayload, validateFreeMarginPositive, (req, res) => OrderController.placeMarketOrder(req, res));
+router.post('/orders/market', validateNewOrderPayload, validateSufficientMargin, (req, res) => OrderController.placeMarketOrder(req, res));
 
 // Get current price for an instrument
 router.get('/instruments/:instrumentId/price', (req, res) => OrderController.getCurrentPrice(req, res));
