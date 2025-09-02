@@ -14,7 +14,7 @@ class FreeMarginMonitorService {
   constructor() {
     this.isRunning = false;
     this.checkInterval = null;
-    this.checkIntervalMs = 5000; // Check every 5 seconds
+    this.checkIntervalMs = 1000; // Check every 1 seconds
     this.marginThreshold = 0; // Close positions when free margin reaches 0
   }
 
@@ -108,7 +108,7 @@ class FreeMarginMonitorService {
       logger.debug(`Checking free margin for account ${account.accountUid}: ${account.freeMargin}`);
 
       // Check if free margin is at or below threshold
-      if (account.freeMargin <= this.marginThreshold) {
+      if (account.freeMargin <= this.marginThreshold && account.balance!=0) {
         logger.warn(`Free margin threshold reached for account ${account.accountUid}: ${account.freeMargin}`);
         await this.closeAllPositionsForAccount(account);
       }
