@@ -18,7 +18,7 @@ class AccountMetricsService {
   constructor() {
     this.isRunning = false;
     this.updateInterval = null;
-    this.updateIntervalMs = 100; // 0.1 second interval
+    this.updateIntervalMs = 1000; // 1 second interval
   }
 
   /**
