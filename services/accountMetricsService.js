@@ -149,7 +149,7 @@ class AccountMetricsService {
       return {
         equity: account.balance,
         margin: 0,
-        freeMargin: account.balance,
+        freeMargin: account.freeMargin,
         marginLevel: 0,
         totalUnrealizedPnL: 0,
         totalMarginUsed: 0
