@@ -13,7 +13,7 @@ class PositionCheckService {
   constructor() {
     this.isRunning = false;
     this.checkInterval = null;
-    this.checkIntervalMs = 10000; // 10 seconds instead of 100ms for testing
+    this.checkIntervalMs = 100; // 0.1 seconds for fast Supabase data checking
   }
 
   /**

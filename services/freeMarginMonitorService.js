@@ -14,7 +14,7 @@ class FreeMarginMonitorService {
   constructor() {
     this.isRunning = false;
     this.checkInterval = null;
-    this.checkIntervalMs = 5000; // Check every 5 seconds
+    this.checkIntervalMs = 100; // 0.1 seconds for fast Supabase data checking
     this.marginThreshold = 0; // Close positions when free margin reaches 0
   }
 
