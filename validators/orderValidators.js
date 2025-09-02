@@ -103,9 +103,7 @@ export async function validateFreeMarginPositive(req, res, next) {
 
 		return next();
 	} catch (error) {
-		return res.status(301).json({
-			error: 'Insufficient free margin',
-		});
+		return res.status(301).json({ error: error.message });
 	}
 }
 
