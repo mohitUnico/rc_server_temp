@@ -18,6 +18,7 @@ class PositionRepository extends BaseRepository {
 
   /**
    * Create a new position with retry logic (matching Flutter createPosition)
+   * Margin will be automatically calculated if not provided
    */
   async createPosition({
     accountId,
@@ -27,11 +28,19 @@ class PositionRepository extends BaseRepository {
     entryPrice,
     slPrice,
     tpPrice,
-    marginUsed
+    marginUsed = null
   }) {
     try {
       // Generate a unique ID for the position (similar to Flutter's IdGenerator)
       const positionId = this.generatePositionId();
+
+      // Calculate margin used if not provided
+      let calculatedMarginUsed = await this.calculateRequiredMargin({
+          accountId,
+          instrumentId,
+          lotSize,
+          entryPrice
+        });
 
       const data = {
         id: positionId,
@@ -43,7 +52,7 @@ class PositionRepository extends BaseRepository {
         sl_price: slPrice,
         tp_price: tpPrice,
         status: PositionStatus.OPEN,
-        margin_used: marginUsed,
+        margin_used: calculatedMarginUsed,
         opened_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -62,6 +71,86 @@ class PositionRepository extends BaseRepository {
    */
   generatePositionId() {
     return Math.floor(Math.random() * 9000000000) + 1000000000; // 10-digit number
+  }
+
+  /**
+   * Calculate required margin for a position using the formula:
+   * Margin = (Trade Size (lot size) × Contract Size × Price) / Leverage
+   */
+  async calculateRequiredMargin({ accountId, instrumentId, lotSize, entryPrice }) {
+    try {
+      // Get the trading account to get leverage - try both ID and UID approaches
+      let account = await this.tradingAccountRepository.findTradingAccountById(accountId);
+      
+      // If not found by ID, try by UID (since accountId might actually be a UID)
+      if (!account) {
+        console.log(`Account not found by ID ${accountId}, trying by UID...`);
+        account = await this.tradingAccountRepository.findTradingAccountByUid(accountId);
+      }
+      
+      if (!account) {
+        throw new Error(`Trading account not found by ID or UID: ${accountId}`);
+      }
+
+      console.log(`Found trading account:`, {
+        id: account.id,
+        uid: account.accountUid,
+        leverage: account.leverage
+      });
+
+      // Get the instrument to get contract size
+      const instrument = await this.instrumentRepository.findInstrumentById(instrumentId);
+      if (!instrument) {
+        throw new Error(`Instrument not found: ${instrumentId}`);
+      }
+
+      console.log(`Found instrument:`, {
+        id: instrument.id,
+        symbol: instrument.symbol,
+        category: instrument.category,
+        contractSize: instrument.contractSize
+      });
+
+      // Get leverage from account (fallback to 100x if missing)
+      const leverage = Number(account.leverage) > 0 ? Number(account.leverage) : 100;
+
+      // Get contract size from instrument (fallback to category-based defaults)
+      let contractSize = 100000.0; // Default for Forex
+      if (instrument.contractSize) {
+        contractSize = instrument.contractSize;
+      } else if (instrument.category) {
+        switch (instrument.category) {
+          case InstrumentCategory.FOREX:
+            contractSize = 100000.0;
+            break;
+          case InstrumentCategory.METAL: // Gold
+            contractSize = 100.0;
+            break;
+          case InstrumentCategory.CRYPTO:
+            contractSize = 1.0;
+            break;
+          default:
+            contractSize = 1.0;
+            break;
+        }
+      }
+
+      // Calculate margin using the formula: Margin = (Lot Size × Contract Size × Price) / Leverage
+      const margin = (lotSize * contractSize * entryPrice) / leverage;
+
+      console.log(`Calculated margin for position:`, {
+        lotSize,
+        contractSize,
+        entryPrice,
+        leverage,
+        calculatedMargin: margin
+      });
+
+      return margin;
+    } catch (error) {
+      console.error('Error calculating required margin:', error);
+      throw error; // Don't use fallback, let the error propagate
+    }
   }
 
   /**
