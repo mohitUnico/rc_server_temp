@@ -16,7 +16,7 @@ class PendingOrderService {
   constructor() {
     this.isRunning = false;
     this.checkInterval = null;
-    this.checkIntervalMs = 100; // 0.1 seconds for fast Supabase data checking
+    this.checkIntervalMs = 100; // 0.1 seconds as requested
   }
 
   /**
