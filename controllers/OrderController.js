@@ -159,10 +159,10 @@ class OrderController {
 				return res.status(403).json({ error: 'Access denied: Order does not belong to this account' });
 			}
 
-			// Only pending orders can be modified
-			if (currentOrder.status !== OrderStatus.PENDING) {
+			// Only placed limit/stop orders can be modified (not market or already filled/cancelled)
+			if (currentOrder.status !== OrderStatus.PLACED) {
 				return res.status(400).json({ 
-					error: `Order cannot be modified. Current status: ${currentOrder.status}. Only pending orders can be modified.` 
+					error: `Order cannot be modified. Current status: ${currentOrder.status}. Only placed orders can be modified.` 
 				});
 			}
 
