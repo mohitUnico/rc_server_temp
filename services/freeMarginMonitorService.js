@@ -15,7 +15,7 @@ class FreeMarginMonitorService {
     this.isRunning = false;
     this.checkInterval = null;
     this.checkIntervalMs = 5000; // Check every 5 seconds
-    this.marginThreshold = 0; // Close positions when free margin reaches 0
+    this.marginThreshold = 10; // Close positions when free margin reaches 0
   }
 
   /**
