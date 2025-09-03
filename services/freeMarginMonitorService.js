@@ -87,7 +87,7 @@ class FreeMarginMonitorService {
         return {
           id: account.id,
           accountUid: account.account_uid,
-          freeMargin: account.free_margin || 0,
+          freeMargin: account.free_margin,
           balance: account.balance || 0,
           equity: account.equity || 0,
           margin: account.margin || 0,
@@ -106,6 +106,17 @@ class FreeMarginMonitorService {
   async checkAccountFreeMargin(account) {
     try {
       logger.debug(`Checking free margin for account ${account.accountUid}: ${account.freeMargin}`);
+
+      // Validate free margin before acting
+      if (account.freeMargin === null || account.freeMargin === undefined) {
+        logger.debug(`Skipping account ${account.accountUid}: free_margin is null/undefined`);
+        return;
+      }
+
+      if (typeof account.freeMargin !== 'number' || Number.isNaN(account.freeMargin)) {
+        logger.warn(`Skipping account ${account.accountUid}: free_margin is not a valid number: ${account.freeMargin}`);
+        return;
+      }
 
       // Check if free margin is at or below threshold
       if (account.freeMargin <= this.marginThreshold && account.balance!=0) {
@@ -141,8 +152,7 @@ class FreeMarginMonitorService {
         await this.closePositionAtMarketPrice(position);
       }
 
-      // Set balance to 0 after closing all positions since free margin reached 0
-      await this.setAccountBalanceToZero(account.accountUid);
+      // Do not force balance to zero here; balance has already been adjusted by PnL from closed positions
 
       logger.info(`✅ Successfully closed all positions for account ${account.accountUid} due to free margin protection`);
     } catch (error) {
