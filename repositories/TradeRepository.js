@@ -15,6 +15,7 @@ class TradeRepository extends BaseRepository {
    */
   async createTrade({
     orderId,
+    positionId,
     accountId,
     symbolId,
     side,
@@ -25,6 +26,7 @@ class TradeRepository extends BaseRepository {
     try {
       const data = {
         order_id: orderId,
+        position_id: positionId,
         account_id: accountId,
         symbol_id: symbolId,
         side: side,

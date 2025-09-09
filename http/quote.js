@@ -41,10 +41,24 @@ router.get('/quote', async (req, res) => {
     }
     const url = `${baseUrl}?code=${symbol}&region=${region}`;
     try {
-        const response = await fetch(url, {
+        let response = await fetch(url, {
             headers: { token: ITICK_WS_AUTH_TOKEN }
         });
-        const data = await response.json();
+
+        // If unauthorized, try query token fallback (some gateways require token in query)
+        if (response.status === 401) {
+            const fallbackUrl = `${url}&token=${encodeURIComponent(ITICK_WS_AUTH_TOKEN)}`;
+            response = await fetch(fallbackUrl);
+        }
+
+        const text = await response.text();
+        let data;
+        try { data = JSON.parse(text); } catch (_) { data = { raw: text }; }
+
+        if (!response.ok) {
+            return res.status(response.status).json({ error: 'Quote request failed', status: response.status, body: data });
+        }
+
         res.json(data);
     } catch (err) {
         res.status(500).json({ error: err.message });

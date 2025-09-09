@@ -46,7 +46,7 @@ class PendingOrderService {
 
     logger.info('Stopping pending order service');
     this.isRunning = false;
-    
+
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
@@ -60,7 +60,7 @@ class PendingOrderService {
     try {
       // Get all pending orders
       const pendingOrders = await orderRepository.findPendingOrders();
-      
+
       if (pendingOrders.length === 0) {
         return; // No pending orders to check
       }
@@ -83,7 +83,7 @@ class PendingOrderService {
     try {
       // Get current price for the instrument from WebSocket cache
       const currentPrice = await priceCacheService.getCurrentPriceByInstrumentId(order.instrumentId);
-      
+
       // if (!currentPrice) {
       //   logger.warn(`Could not get current price for instrument ${order.instrumentId} from WebSocket cache`);
       //   return;
@@ -117,29 +117,29 @@ class PendingOrderService {
       case OrderType.BUY_LIMIT:
         // Buy limit: fill when current price <= limit price
         return price <= limitPrice;
-      
+
       case OrderType.SELL_LIMIT:
         // Sell limit: fill when current price >= limit price
         return price >= limitPrice;
-      
+
       case OrderType.BUY_STOP:
         // Buy stop: fill when current price >= limit price
         return price >= limitPrice;
-      
+
       case OrderType.SELL_STOP:
         // Sell stop: fill when current price <= limit price
         return price <= limitPrice;
-      
+
       case OrderType.BUY_STOP_LIMIT:
         // Buy stop limit: fill when current price >= stop price AND <= limit price
         // For simplicity, we'll use the limit value as the trigger price
         return price >= limitPrice;
-      
+
       case OrderType.SELL_STOP_LIMIT:
         // Sell stop limit: fill when current price <= stop price AND >= limit price
         // For simplicity, we'll use the limit value as the trigger price
         return price <= limitPrice;
-      
+
       default:
         logger.warn(`Unknown order type: ${order.orderType}`);
         return false;
@@ -155,7 +155,7 @@ class PendingOrderService {
 
       // Fill the order using the repository
       const filledOrder = await orderRepository.fillOrder(order.id, fillPrice);
-      
+
       logger.info(`Successfully filled order ${order.id}`);
 
       // Create a position based on the filled order
@@ -179,13 +179,13 @@ class PendingOrderService {
         case OrderType.BUY_STOP_LIMIT:
           positionType = PositionType.BUY;
           break;
-        
+
         case OrderType.SELL_LIMIT:
         case OrderType.SELL_STOP:
         case OrderType.SELL_STOP_LIMIT:
           positionType = PositionType.SELL;
           break;
-        
+
         default:
           logger.warn(`Cannot create position for order type: ${order.orderType}`);
           return;
@@ -205,6 +205,9 @@ class PendingOrderService {
         tpPrice: order.tpPrice,
         marginUsed: marginUsed
       });
+
+      // Attach position to order so downstream consumers can link
+      await orderRepository.updateOrder(order.id, { position_id: position.id });
 
       logger.info(`Created position ${position.id} from filled order ${order.id}`);
 
@@ -230,7 +233,7 @@ class PendingOrderService {
   async checkPendingOrdersForAccount(accountId) {
     try {
       const pendingOrders = await orderRepository.findPendingOrders(accountId);
-      
+
       if (pendingOrders.length === 0) {
         return;
       }
@@ -252,7 +255,7 @@ class PendingOrderService {
     try {
       const orders = await orderRepository.findOrdersByInstrument(accountId, instrumentId);
       const pendingOrders = orders.filter(order => order.isPending());
-      
+
       if (pendingOrders.length === 0) {
         return;
       }
@@ -300,7 +303,7 @@ class PendingOrderService {
       logger.warn('Service is not running, cannot trigger check');
       return;
     }
-    
+
     logger.info('Manually triggering pending order check');
     await this.checkPendingOrders();
   }

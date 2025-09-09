@@ -76,19 +76,8 @@ class OrderController {
 				// 2) Fill order at current price
 				const filledOrder = await orderRepository.fillOrder(placedOrder.id, currentPrice);
 
-				// 3) Create trade
+				// 3) Create position
 				const side = orderType === OrderType.MARKET_BUY ? 'buy' : 'sell';
-				const trade = await tradeRepository.createTrade({
-					orderId: filledOrder.id,
-					accountId: accountId,
-					symbolId: instrumentId,
-					side,
-					quantity: lotSize,
-					price: currentPrice,
-					fee: null
-				});
-
-				// 4) Create position
 				const positionType = side === 'buy' ? PositionType.BUY : PositionType.SELL;
 				const position = await positionRepository.createPosition({
 					accountId: accountId,
@@ -101,8 +90,23 @@ class OrderController {
 					marginUsed: 0
 				});
 
+				// 4) Attach position to order and use updated order for response
+				const updatedOrder = await orderRepository.updateOrder(filledOrder.id, { position_id: position.id });
+
+				// 5) Create trade linked to position
+				const trade = await tradeRepository.createTrade({
+					orderId: filledOrder.id,
+					positionId: position.id,
+					accountId: accountId,
+					symbolId: instrumentId,
+					side,
+					quantity: lotSize,
+					price: currentPrice,
+					fee: null
+				});
+
 				return res.status(201).json({ 
-					order: filledOrder, 
+					order: updatedOrder, 
 					trade, 
 					position,
 					executedPrice: currentPrice 
@@ -477,18 +481,7 @@ class OrderController {
 			// 2) Fill the order at current price
 			const filledOrder = await orderRepository.fillOrder(placedOrder.id, finalPrice);
 
-			// 3) Create trade
-			const trade = await tradeRepository.createTrade({
-				orderId: filledOrder.id,
-				accountId: accountId,
-				symbolId: instrumentId,
-				side: side,
-				quantity: lotSize,
-				price: finalPrice,
-				fee: null
-			});
-
-			// 4) Create position
+			// 3) Create position
 			const positionType = side === 'buy' ? PositionType.BUY : PositionType.SELL;
 			const position = await positionRepository.createPosition({
 				accountId: accountId,
@@ -501,8 +494,23 @@ class OrderController {
 				marginUsed: 0 // optionally compute margin here if needed
 			});
 
+			// 4) Attach position to order and use updated order for response
+			const updatedOrder = await orderRepository.updateOrder(filledOrder.id, { position_id: position.id });
+
+			// 5) Create trade linked to position
+			const trade = await tradeRepository.createTrade({
+				orderId: filledOrder.id,
+				positionId: position.id,
+				accountId: accountId,
+				symbolId: instrumentId,
+				side: side,
+				quantity: lotSize,
+				price: finalPrice,
+				fee: null
+			});
+
 			return res.status(201).json({ 
-				order: filledOrder, 
+				order: updatedOrder, 
 				trade, 
 				position,
 				executedPrice: finalPrice 
@@ -592,18 +600,7 @@ class OrderController {
 			// 2) Fill order at current price
 			const filledOrder = await orderRepository.fillOrder(placedOrder.id, currentPrice);
 
-			// 3) Create trade
-			const trade = await tradeRepository.createTrade({
-				orderId: filledOrder.id,
-				accountId: accountId,
-				symbolId: instrumentId,
-				side: side,
-				quantity: lotSize,
-				price: currentPrice,
-				fee: null
-			});
-
-			// 4) Create position
+			// 3) Create position
 			const positionType = side === 'buy' ? PositionType.BUY : PositionType.SELL;
 			const position = await positionRepository.createPosition({
 				accountId: accountId,
@@ -616,8 +613,23 @@ class OrderController {
 				marginUsed: 0
 			});
 
+			// 4) Attach position to order and use updated order for response
+			const updatedOrder = await orderRepository.updateOrder(filledOrder.id, { position_id: position.id });
+
+			// 5) Create trade linked to position
+			const trade = await tradeRepository.createTrade({
+				orderId: filledOrder.id,
+				positionId: position.id,
+				accountId: accountId,
+				symbolId: instrumentId,
+				side: side,
+				quantity: lotSize,
+				price: currentPrice,
+				fee: null
+			});
+
 			return res.status(201).json({ 
-				order: filledOrder, 
+				order: updatedOrder, 
 				trade, 
 				position,
 				executedPrice: currentPrice,

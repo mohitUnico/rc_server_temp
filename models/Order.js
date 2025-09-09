@@ -9,6 +9,7 @@ class Order {
     this.id = data.id || null;
     this.accountId = data.account_id || null;
     this.instrumentId = data.instrument_id || null;
+    this.positionId = data.position_id || null;
     this.orderType = data.order_type || null;
     this.lotSize = data.lot_size || 0;
     this.status = data.status || OrderStatus.PENDING;
@@ -28,6 +29,7 @@ class Order {
       id: this.id,
       account_id: this.accountId,
       instrument_id: this.instrumentId,
+      position_id: this.positionId,
       order_type: this.orderType,
       lot_size: this.lotSize,
       status: this.status,

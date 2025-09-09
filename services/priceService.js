@@ -50,15 +50,24 @@ class PriceService {
 
       logger.info(`Fetching price for ${symbol} (${type}) from: ${url}`);
 
-      const response = await fetch(url, {
+      let response = await fetch(url, {
         headers: { token: ITICK_WS_AUTH_TOKEN }
       });
 
-      if (!response.ok) {
-        throw new Error(`Quote API responded with status: ${response.status}`);
+      // Fallback for 401: retry with token as query param
+      if (response.status === 401) {
+        const fallbackUrl = `${url}&token=${encodeURIComponent(ITICK_WS_AUTH_TOKEN)}`;
+        logger.warn(`Got 401 from quote API, retrying with token query: ${fallbackUrl}`);
+        response = await fetch(fallbackUrl);
       }
 
-      const responseData = await response.json();
+      const rawText = await response.text();
+      let responseData;
+      try { responseData = JSON.parse(rawText); } catch (_) { responseData = { raw: rawText }; }
+
+      if (!response.ok) {
+        throw new Error(`Quote API failed: ${response.status} - ${typeof responseData === 'object' ? JSON.stringify(responseData).slice(0,200) : String(responseData).slice(0,200)}`);
+      }
       
       // Check if the response has the expected structure
       if (responseData.code !== 0 || !responseData.data) {

@@ -9,6 +9,7 @@ class Trade {
     this.id = data.id || null;
     this.createdAt = data.created_at || new Date();
     this.orderId = data.order_id || null;
+    this.positionId = data.position_id || null;
     this.accountId = data.account_id || null;
     this.symbolId = data.symbol_id || null;
     this.side = data.side || null;
@@ -26,6 +27,7 @@ class Trade {
       id: this.id,
       created_at: this.createdAt,
       order_id: this.orderId,
+      position_id: this.positionId,
       account_id: this.accountId,
       symbol_id: this.symbolId,
       side: this.side,
