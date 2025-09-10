@@ -8,12 +8,18 @@ import { PositionStatus } from '../enums/positionEnums.js';
 import TradingAccountRepository from './TradingAccountRepository.js';
 import InstrumentRepository from './InstrumentRepository.js';
 import { InstrumentCategory } from '../enums/instrumentEnums.js';
+import OrderRepository from './OrderRepository.js';
+import TradeRepository from './TradeRepository.js';
+import { OrderType, OrderStatus } from '../enums/orderEnums.js';
+import { OrderSide } from '../enums/orderEnums.js';
 
 class PositionRepository extends BaseRepository {
   constructor() {
     super('positions');
     this.tradingAccountRepository = new TradingAccountRepository();
     this.instrumentRepository = new InstrumentRepository();
+    this.orderRepository = new OrderRepository();
+    this.tradeRepository = new TradeRepository();
   }
 
   /**
@@ -71,6 +77,50 @@ class PositionRepository extends BaseRepository {
    */
   generatePositionId() {
     return Math.floor(Math.random() * 9000000000) + 1000000000; // 10-digit number
+  }
+
+  /**
+   * Create order and trade entries for closing a position (opposite of opening)
+   */
+  async createCloseOrderAndTrade(position, closeLotSize, exitPrice) {
+    try {
+      // Determine the opposite order type and side for closing
+      const isBuyPosition = position.positionType === 'buy';
+      const orderType = isBuyPosition ? OrderType.MARKET_SELL : OrderType.MARKET_BUY;
+      const side = isBuyPosition ? OrderSide.SELL : OrderSide.BUY;
+
+      // Create a market order for closing the position
+      const orderData = {
+        account_id: position.accountId,
+        instrument_id: position.instrumentId,
+        position_id: position.id,
+        order_type: orderType,
+        lot_size: closeLotSize,
+        status: OrderStatus.FILLED, // Market orders are filled immediately
+        price: exitPrice,
+        filled_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      };
+
+      const closeOrder = await this.orderRepository.placeOrder(orderData);
+
+      // Create trade entry for the closing transaction
+      const trade = await this.tradeRepository.createTrade({
+        orderId: closeOrder.id,
+        positionId: position.id,
+        accountId: position.accountId,
+        symbolId: position.instrumentId,
+        side: side,
+        quantity: closeLotSize,
+        price: exitPrice,
+        fee: null
+      });
+
+      return { closeOrder, trade };
+    } catch (error) {
+      console.error('Error creating close order and trade:', error);
+      throw error;
+    }
   }
 
   /**
@@ -269,6 +319,17 @@ class PositionRepository extends BaseRepository {
       const result = await this.updateById(positionId, updates);
       const closedPosition = Position.fromDatabase(result);
       console.log(`Position closed successfully. Saved PnL: ${closedPosition.pnl}, Margin used preserved: ${closedPosition.marginUsed}`);
+
+      // Create order and trade entries for closing the position
+      console.log(`Creating close order and trade for position ${positionId}`);
+      try {
+        const { closeOrder, trade } = await this.createCloseOrderAndTrade(position, position.lotSize, exitPrice);
+        console.log(`Created close order ${closeOrder.id} and trade ${trade.id} for position ${positionId}`);
+      } catch (orderTradeError) {
+        console.error('Error creating close order and trade:', orderTradeError);
+        // Don't throw here - the position is already closed, we don't want to rollback
+        // Just log the error for debugging
+      }
 
       // Update account balance with the PnL
       console.log(`Updating balance for account ${position.accountId} with PnL ${pnl}`);
@@ -528,7 +589,18 @@ class PositionRepository extends BaseRepository {
 
       const updatedPosition = await this.updateById(originalPosition.id, updates);
 
-      // 3. Update account balance with the PnL from the closed portion
+      // 3. Create order and trade entries for the partial close
+      console.log(`Creating close order and trade for partial close of position ${originalPosition.id}`);
+      try {
+        const { closeOrder, trade } = await this.createCloseOrderAndTrade(originalPosition, closeLotSize, exitPrice);
+        console.log(`Created close order ${closeOrder.id} and trade ${trade.id} for partial close of position ${originalPosition.id}`);
+      } catch (orderTradeError) {
+        console.error('Error creating close order and trade for partial close:', orderTradeError);
+        // Don't throw here - the position is already updated, we don't want to rollback
+        // Just log the error for debugging
+      }
+
+      // 4. Update account balance with the PnL from the closed portion
       try {
         await this.tradingAccountRepository.updateBalanceByAmountWithUid({
           accountUid: originalPosition.accountId,
