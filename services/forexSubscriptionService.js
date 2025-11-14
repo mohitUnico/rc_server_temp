@@ -9,15 +9,20 @@ export class ForexSubscriptionService {
         this.periodicTimer = null;
         this.forexManager = null;
 
-        // Initialize all 80 forex symbols
+        // Initialize forex symbols (TEMPORARY: Limited to 3 symbols for testing)
         this.initializeForexSymbols();
     }
 
     initializeForexSymbols() {
-        // Get all 80 forex symbols from configuration
-        this.allSymbols = getAllForexSymbols();
+        // TEMPORARY: Limit to 3 symbols for testing
+        // TODO: Revert this change to use all symbols
+        // Original code: this.allSymbols = getAllForexSymbols();
+        this.allSymbols = ['EURUSD', 'GBPUSD', 'USDJPY']; // Only 3 major pairs for testing
 
-        this.logger.info(`Initialized ${this.allSymbols.length} forex symbols for single subscription`);
+        // Get all 80 forex symbols from configuration (COMMENTED OUT - TEMPORARY)
+        // this.allSymbols = getAllForexSymbols();
+
+        this.logger.info(`Initialized ${this.allSymbols.length} forex symbols for single subscription (TEMPORARY: Limited to 3 symbols)`);
     }
 
     async subscribeToAllSymbols(forexManager) {
