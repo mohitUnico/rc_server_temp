@@ -1,28 +1,26 @@
-import nodemailer from 'nodemailer';
-import { LOGO_PATH } from '../config/envConfig.js';
+import sgMail from '@sendgrid/mail';
+import fs from 'fs';
+import { LOGO_PATH, FROM_EMAIL, SENDGRID_API_KEY } from '../config/envConfig.js';
 
 export class EmailService {
     constructor() {
-        // Create transporter for Gmail (you can change this to your preferred email provider)
-        this.transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                user: process.env.EMAIL_USER,        // Your Gmail address
-                pass: process.env.EMAIL_APP_PASSWORD // Gmail App Password (not regular password)
-            }
-        });
+        // Initialize SendGrid
+        sgMail.setApiKey(SENDGRID_API_KEY);
+
+        console.log('✅ SendGrid Email Service initialized');
+        console.log(`📧 From Email: ${FROM_EMAIL}`);
 
         // Rate limiting configuration
         this.emailQueue = [];
         this.isProcessing = false;
         this.lastEmailTime = 0;
 
-        // Configure based on Gmail type (adjust these values as needed)
+        // Configure rate limiting (still useful with SendGrid to avoid abuse)
         this.config = {
-            minDelayBetweenEmails: parseInt(process.env.EMAIL_MIN_DELAY) || 2000, // 2 seconds between emails
+            minDelayBetweenEmails: parseInt(process.env.EMAIL_MIN_DELAY) || 1000, // 1 second between emails
             maxRetries: parseInt(process.env.EMAIL_MAX_RETRIES) || 3,
-            initialRetryDelay: parseInt(process.env.EMAIL_INITIAL_RETRY_DELAY) || 5000, // 5 seconds
-            maxRetryDelay: parseInt(process.env.EMAIL_MAX_RETRY_DELAY) || 60000, // 60 seconds
+            initialRetryDelay: parseInt(process.env.EMAIL_INITIAL_RETRY_DELAY) || 2000, // 2 seconds
+            maxRetryDelay: parseInt(process.env.EMAIL_MAX_RETRY_DELAY) || 30000, // 30 seconds
         };
     }
 
@@ -57,24 +55,36 @@ export class EmailService {
             }
 
             try {
-                // Try to send the email
-                const info = await this.transporter.sendMail(emailOptions);
+                // Try to send the email via SendGrid
+                const response = await sgMail.send(emailOptions);
                 this.lastEmailTime = Date.now();
+
+                const messageId =
+                    response?.[0]?.headers?.['x-message-id'] ||
+                    response?.[0]?.headers?.['X-Message-Id'] ||
+                    'sent';
+
                 resolve({
                     success: true,
-                    messageId: info.messageId,
+                    messageId,
                     message: 'Email sent successfully'
                 });
             } catch (error) {
                 // Handle rate limit errors (429) with exponential backoff
-                if (error.responseCode === 429 || error.message.includes('rate limit') || error.message.includes('429')) {
+                const statusCode = error.code || error.response?.statusCode;
+                const errorMessage =
+                    error.response?.body?.errors?.[0]?.message ||
+                    error.message ||
+                    'Unknown SendGrid error';
+
+                if (statusCode === 429 || errorMessage.includes('rate limit') || errorMessage.includes('429')) {
                     if (retries < this.config.maxRetries) {
                         const retryDelay = Math.min(
                             this.config.initialRetryDelay * Math.pow(2, retries),
                             this.config.maxRetryDelay
                         );
 
-                        console.log(`⚠️ Rate limit hit (429). Retry ${retries + 1}/${this.config.maxRetries} after ${retryDelay}ms`);
+                        console.log(`⚠️ SendGrid rate limit hit (429). Retry ${retries + 1}/${this.config.maxRetries} after ${retryDelay}ms`);
 
                         // Re-queue the email at the front with updated retry count
                         this.emailQueue.unshift({
@@ -91,15 +101,15 @@ export class EmailService {
                         reject({
                             success: false,
                             error: 'Rate limit exceeded. Max retries reached.',
-                            originalError: error.message
+                            originalError: errorMessage
                         });
                     }
                 } else {
                     // Other errors
-                    console.error('❌ Email send error:', error);
+                    console.error('❌ SendGrid email send error:', error);
                     reject({
                         success: false,
-                        error: error.message
+                        error: errorMessage
                     });
                 }
             }
@@ -113,13 +123,22 @@ export class EmailService {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    // Send trading credentials via email (now with rate limiting and retry logic)
+    // Send trading credentials via email (with rate limiting, queue, and SendGrid)
     async sendTradingCredentials(emailID, tradingID, tradingPassword) {
         try {
-            // Email template
+            // Read and encode logo for SendGrid attachment (optional)
+            let logoBase64 = '';
+            try {
+                const logoBuffer = fs.readFileSync(LOGO_PATH);
+                logoBase64 = logoBuffer.toString('base64');
+            } catch (logoError) {
+                console.warn('⚠️ Could not read logo file, sending email without logo. Path:', LOGO_PATH);
+            }
+
+            // Email template (SendGrid)
             const mailOptions = {
-                from: process.env.EMAIL_USER,
                 to: emailID,
+                from: FROM_EMAIL,
                 subject: '🔐 Your Trading Credentials - Secure Access',
                 html: `
                     <!DOCTYPE html>
@@ -201,13 +220,21 @@ export class EmailService {
                         </div>
                     </body>
                     </html>
-                `,
-                attachments: [{
-                    filename: 'logo.png',
-                    path: LOGO_PATH,
-                    cid: 'logo'
-                }]
+                `
             };
+
+            // Add inline logo attachment for SendGrid if available
+            if (logoBase64) {
+                mailOptions.attachments = [
+                    {
+                        content: logoBase64,
+                        filename: 'logo.png',
+                        type: 'image/png',
+                        disposition: 'inline',
+                        content_id: 'logo'
+                    }
+                ];
+            }
 
             // Use queue system with rate limiting and retry logic
             const result = await this.queueEmail(mailOptions);
@@ -232,14 +259,25 @@ export class EmailService {
         }
     }
 
-    // Test email service
+    // Test email service (basic configuration check for SendGrid)
     async testEmailService() {
         try {
-            const result = await this.transporter.verify();
-            console.log('✅ Email service is ready');
-            return { success: true, message: 'Email service is ready' };
+            if (!SENDGRID_API_KEY) {
+                throw new Error('SENDGRID_API_KEY not configured');
+            }
+            if (!FROM_EMAIL) {
+                throw new Error('FROM_EMAIL not configured');
+            }
+
+            console.log('✅ SendGrid email service configuration looks valid');
+            return {
+                success: true,
+                message: 'SendGrid email service configuration looks valid',
+                provider: 'SendGrid',
+                fromEmail: FROM_EMAIL
+            };
         } catch (error) {
-            console.error('❌ Email service test failed:', error);
+            console.error('❌ SendGrid email service test failed:', error);
             return { success: false, error: error.message };
         }
     }
@@ -247,9 +285,10 @@ export class EmailService {
     // Get email service status
     getEmailServiceStatus() {
         return {
-            service: 'gmail',
-            user: process.env.EMAIL_USER ? 'Configured' : 'Not configured',
-            appPassword: process.env.EMAIL_APP_PASSWORD ? 'Configured' : 'Not configured',
+            service: 'SendGrid',
+            provider: 'SendGrid',
+            apiKey: SENDGRID_API_KEY ? 'Configured' : 'Not configured',
+            fromEmail: FROM_EMAIL || 'Not configured',
             queueLength: this.emailQueue.length,
             isProcessing: this.isProcessing,
             rateLimitConfig: {
