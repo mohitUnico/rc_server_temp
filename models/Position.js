@@ -96,18 +96,28 @@ class Position {
   }
 
   /**
-   * Calculate current P&L based on current price (matching Flutter _calculateRealtimePnL)
+   * Calculate current P&L using formula: Profit = Price Difference × Pip Value × Lot_size
+   * Note: pipValue should be obtained from the instrument
    */
-  calculatePnL(currentPrice, contractSize = 100000.0) {
+  calculatePnL(currentPrice, pipValue) {
     if (!currentPrice) {
       return this.pnl; // Return stored PnL if no current price
     }
 
-    if (this.positionType === PositionType.BUY) {
-      return (currentPrice - this.entryPrice) * this.lotSize * contractSize;
-    } else {
-      return (this.entryPrice - currentPrice) * this.lotSize * contractSize;
+    if (!pipValue || pipValue <= 0) {
+      return 0; // Return 0 if pipValue is invalid
     }
+
+    // Calculate price difference
+    let priceDifference;
+    if (this.positionType === PositionType.BUY) {
+      priceDifference = currentPrice - this.entryPrice;
+    } else {
+      priceDifference = this.entryPrice - currentPrice;
+    }
+
+    // Formula: Profit = Price Difference × Pip Value × Lot_size
+    return priceDifference * pipValue * this.lotSize;
   }
 
   /**
@@ -166,15 +176,19 @@ class Position {
 
   /**
    * Close position with exit price
+   * Note: PnL should be calculated separately using the repository's calculatePnL method
+   * which has access to instrument pip_value
    */
-  closePosition(exitPrice) {
+  closePosition(exitPrice, pnl = null) {
     this.exitPrice = exitPrice;
     this.status = PositionStatus.CLOSED;
     this.closedAt = new Date();
     this.updatedAt = new Date();
     
-    // Calculate final P&L
-    this.pnl = this.calculatePnL(exitPrice);
+    // Set PnL if provided, otherwise leave it as is (will be calculated by repository)
+    if (pnl !== null) {
+      this.pnl = pnl;
+    }
   }
 }
 

@@ -429,7 +429,7 @@ class PositionRepository extends BaseRepository {
   }
 
   /**
-   * Calculate PnL for a position (matching Flutter _calculateRealtimePnL)
+   * Calculate PnL for a position using formula: Profit = Price Difference × Pip Value × Lot_size
    */
   async calculatePnL(position, currentPrice) {
     try {
@@ -438,44 +438,15 @@ class PositionRepository extends BaseRepository {
         return position.pnl;
       }
 
-      // Get the instrument to get the contract size
+      // Get the instrument to get pip_value
       const instrument = await this.instrumentRepository.findInstrumentById(position.instrumentId);
       
-      console.log(`Instrument details for ${position.instrumentId}:`, {
-        id: instrument?.id,
-        symbol: instrument?.symbol,
-        category: instrument?.category,
-        name: instrument?.name,
-        contractSize: instrument?.contractSize
-      });
-      
-      // Use the contract_size from the database, fallback to category-based defaults
-      let contractSize = 100000.0; // Default for Forex
-      if (instrument && instrument.contractSize) {
-        contractSize = instrument.contractSize;
-        console.log(`Using contract size from database: ${contractSize}`);
-      } else if (instrument && instrument.category) {
-        console.log(`No contract_size in database, using category-based default for: "${instrument.category}"`);
-        switch (instrument.category) {
-          case InstrumentCategory.FOREX:
-            contractSize = 100000.0;
-            console.log('Using Forex contract size: 100000.0');
-            break;
-          case InstrumentCategory.METAL: // Gold
-            contractSize = 100.0;
-            console.log('Using Metal contract size: 100.0');
-            break;
-          case InstrumentCategory.CRYPTO:
-            contractSize = 1.0;
-            console.log('Using Crypto contract size: 1.0');
-            break;
-          default:
-            contractSize = 1.0;
-            console.log(`Unknown category "${instrument.category}", using default contract size: 1.0`);
-            break;
-        }
-      } else {
-        console.log('No instrument found or no category, using default contract size: 100000.0');
+      if (!instrument) {
+        throw new Error(`Instrument not found: ${position.instrumentId}`);
+      }
+
+      if (!instrument.pipValue || instrument.pipValue <= 0) {
+        throw new Error(`Invalid pip_value for instrument ${position.instrumentId}: ${instrument.pipValue}`);
       }
 
       console.log(`Calculating PnL for position ${position.id}:`);
@@ -483,27 +454,25 @@ class PositionRepository extends BaseRepository {
       console.log(`  Current price: ${currentPrice}`);
       console.log(`  Position type: ${position.positionType}`);
       console.log(`  Lot size: ${position.lotSize}`);
-      console.log(`  Contract size: ${contractSize}`);
+      console.log(`  Pip value: ${instrument.pipValue}`);
 
-      let pnl;
+      // Calculate price difference
+      let priceDifference;
       if (position.positionType === 'buy') {
-        pnl = (currentPrice - position.entryPrice) * position.lotSize * contractSize;
+        priceDifference = currentPrice - position.entryPrice;
       } else {
-        pnl = (position.entryPrice - currentPrice) * position.lotSize * contractSize;
+        priceDifference = position.entryPrice - currentPrice;
       }
 
+      // Formula: Profit = Price Difference × Pip Value × Lot_size
+      const pnl = priceDifference * instrument.pipValue * position.lotSize;
+
+      console.log(`  Price difference: ${priceDifference}`);
       console.log(`  Calculated PnL: ${pnl}`);
       return pnl;
     } catch (error) {
       console.error('Error calculating PnL:', error);
-      // Fallback to simplified calculation with default contract size
-      const contractSize = 100000.0;
-
-      if (position.positionType === 'buy') {
-        return (currentPrice - position.entryPrice) * position.lotSize * contractSize;
-      } else {
-        return (position.entryPrice - currentPrice) * position.lotSize * contractSize;
-      }
+      throw error;
     }
   }
 

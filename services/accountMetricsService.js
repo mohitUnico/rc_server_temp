@@ -173,14 +173,27 @@ class AccountMetricsService {
         };
       }
 
-      // Get instrument details for contract size
+      // Get instrument details for pip_value
       const instrument = await instrumentRepository.findInstrumentById(position.instrumentId);
-      const contractSize = instrument?.contractSize || 100000; // Default contract size
+      
+      if (!instrument || !instrument.pipValue || instrument.pipValue <= 0) {
+        logger.warn(`Invalid or missing pip_value for instrument ${position.instrumentId}, returning 0 unrealized PnL`);
+        return {
+          unrealizedPnL: 0,
+          marginUsed: position.marginUsed || 0
+        };
+      }
 
-      // Calculate unrealized P&L
-      const priceDifference = currentPrice - position.entryPrice;
-      const multiplier = position.positionType === 'buy' ? 1 : -1;
-      const unrealizedPnL = priceDifference * multiplier * position.lotSize * contractSize;
+      // Calculate price difference
+      let priceDifference;
+      if (position.positionType === 'buy') {
+        priceDifference = currentPrice - position.entryPrice;
+      } else {
+        priceDifference = position.entryPrice - currentPrice;
+      }
+
+      // Formula: Profit = Price Difference × Pip Value × Lot_size
+      const unrealizedPnL = priceDifference * instrument.pipValue * position.lotSize;
 
       // Use the margin used from the position, or calculate if not available
       const marginUsed = position.marginUsed || this.calculateMarginUsed(position, position.entryPrice);
