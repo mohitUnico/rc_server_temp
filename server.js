@@ -168,7 +168,7 @@ async function startServer() {
                 logger.info('✅ Instrument cache auto-refresh started');
 
                 // Start daily exchange rate updater (every 24 hours)
-                instrumentExchangeRateUpdateService.start();
+                // instrumentExchangeRateUpdateService.start();
                 logger.info('✅ Instrument exchange rate update service started');
                 
                 // Start price cache cleanup interval (every 30 seconds)
