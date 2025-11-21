@@ -474,9 +474,9 @@ class PositionRepository extends BaseRepository {
 
       let pnl;
       if (position.positionType === 'buy') {
-        pnl = ((currentPrice - position.entryPrice) / effectivePipSize) * effectivePipValue * position.lotSize;
+        pnl = ((currentPrice - position.entryPrice)) * effectivePipValue * position.lotSize;
       } else {
-        pnl = ((position.entryPrice - currentPrice) / effectivePipSize) * effectivePipValue * position.lotSize;
+        pnl = ((position.entryPrice - currentPrice)) * effectivePipValue * position.lotSize;
       }
 
       console.log(`  Calculated PnL: ${pnl}`);
@@ -486,7 +486,7 @@ class PositionRepository extends BaseRepository {
       const priceDifference = position.positionType === 'buy'
         ? currentPrice - position.entryPrice
         : position.entryPrice - currentPrice;
-      return (priceDifference / DEFAULT_PIP_SIZE) * DEFAULT_PIP_VALUE * position.lotSize;
+      return (priceDifference) * DEFAULT_PIP_VALUE * position.lotSize;
     }
   }
 
