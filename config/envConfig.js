@@ -10,8 +10,8 @@ const requiredEnvVars = [
     'ITICK_INDICES_WS_URL',
     'SUPABASE_URL',
     'SUPABASE_ANON_KEY',
-    'EMAIL_USER',
-    'EMAIL_APP_PASSWORD',
+    'SENDGRID_API_KEY',
+    'FROM_EMAIL',
     'EXCHANGE_RATE_API_KEY'
 ];
 
@@ -29,7 +29,7 @@ export const SUPABASE_URL = process.env.SUPABASE_URL;
 export const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 export const EXCHANGE_RATE_API_KEY = process.env.EXCHANGE_RATE_API_KEY;
 
-// Email and logo configuration
-export const EMAIL_USER = process.env.EMAIL_USER;
-export const EMAIL_APP_PASSWORD = process.env.EMAIL_APP_PASSWORD;
+// SendGrid email configuration
+export const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+export const FROM_EMAIL = process.env.FROM_EMAIL;
 export const LOGO_PATH = process.env.LOGO_PATH; 
