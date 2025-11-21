@@ -4,6 +4,7 @@ const logger = new Logger('PriceCacheService');
 
 /**
  * In-memory cache for storing latest prices from WebSocket data
+ * TEMPORARY: Currently limited to 3 forex symbols (EURUSD, GBPUSD, USDJPY) for testing
  */
 class PriceCacheService {
   constructor() {
@@ -27,6 +28,7 @@ class PriceCacheService {
 
   /**
    * Start periodic logging of forex price cache every minute
+   * TEMPORARY: Currently limited to 3 symbols for testing
    */
   startPeriodicLogging() {
     // Log every minute (60000ms)
@@ -34,7 +36,7 @@ class PriceCacheService {
       this.logForexPriceCache();
     }, 60000);
 
-    logger.info('Started periodic logging of forex price cache every minute');
+    logger.info('Started periodic logging of forex price cache every minute (TEMPORARY: Limited to 3 symbols)');
   }
 
   /**
@@ -50,6 +52,7 @@ class PriceCacheService {
 
   /**
    * Log the current state of forex price cache to terminal
+   * TEMPORARY: Currently limited to 3 symbols for testing
    */
   logForexPriceCache() {
     try {
@@ -58,11 +61,11 @@ class PriceCacheService {
       const symbolCount = Object.keys(forexPrices).length;
 
       if (symbolCount === 0) {
-        console.log(`\n[${now}] 📊 Forex Price Cache: No symbols cached yet`);
+        console.log(`\n[${now}] 📊 Forex Price Cache: No symbols cached yet (TEMPORARY: Limited to 3 symbols)`);
         return;
       }
 
-      console.log(`\n[${now}] 📊 Forex Price Cache Status (${symbolCount} symbols):`);
+      console.log(`\n[${now}] 📊 Forex Price Cache Status (${symbolCount} symbols) [TEMPORARY: Limited to 3 symbols]:`);
       console.log('─'.repeat(80));
 
       // Group symbols by price ranges for better readability
@@ -151,7 +154,8 @@ class PriceCacheService {
       // Special handling for forex symbols
       if (assetType === 'forex') {
         this.updateForexStats(symbol, priceData);
-        logger.debug(`Updated forex price for ${symbol}: ${price} (${this.priceCache.forex.size} symbols cached)`);
+        // TEMPORARY: Limited to 3 symbols for testing
+        logger.debug(`Updated forex price for ${symbol}: ${price} (${this.priceCache.forex.size} symbols cached) [TEMPORARY: Limited to 3]`);
       } else {
         logger.debug(`Updated price for ${symbol} (${assetType}): ${price}`);
       }
