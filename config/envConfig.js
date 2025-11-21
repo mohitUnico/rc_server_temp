@@ -11,7 +11,8 @@ const requiredEnvVars = [
     'SUPABASE_URL',
     'SUPABASE_ANON_KEY',
     'EMAIL_USER',
-    'EMAIL_APP_PASSWORD'
+    'EMAIL_APP_PASSWORD',
+    'EXCHANGE_RATE_API_KEY'
 ];
 
 for (const envVar of requiredEnvVars) {
@@ -26,6 +27,7 @@ export const ITICK_INDICES_WS_URL = process.env.ITICK_INDICES_WS_URL;
 export const ITICK_WS_AUTH_TOKEN = process.env.ITICK_WS_AUTH_TOKEN;
 export const SUPABASE_URL = process.env.SUPABASE_URL;
 export const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+export const EXCHANGE_RATE_API_KEY = process.env.EXCHANGE_RATE_API_KEY;
 
 // Email and logo configuration
 export const EMAIL_USER = process.env.EMAIL_USER;

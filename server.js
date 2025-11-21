@@ -14,6 +14,7 @@ import priceCacheService from './services/priceCacheService.js';
 import accountMetricsService from './services/accountMetricsService.js';
 import freeMarginMonitorService from './services/freeMarginMonitorService.js';
 import instrumentCacheService from './services/instrumentCacheService.js';
+import instrumentExchangeRateUpdateService from './services/instrumentExchangeRateUpdateService.js';
 
 const app = express();
 const server = createServer(app);
@@ -77,6 +78,9 @@ async function gracefulShutdown(signal) {
         
         instrumentCacheService.stopAutoRefresh();
         logger.info('✅ Instrument cache service stopped');
+
+        instrumentExchangeRateUpdateService.stop();
+        logger.info('✅ Instrument exchange rate update service stopped');
     } catch (error) {
         logger.error('❌ Error stopping trading monitor services:', error);
     }
@@ -162,6 +166,10 @@ async function startServer() {
                 // Start instrument cache auto-refresh (every 5 minutes)
                 instrumentCacheService.startAutoRefresh(300000);
                 logger.info('✅ Instrument cache auto-refresh started');
+
+                // Start daily exchange rate updater (every 24 hours)
+                instrumentExchangeRateUpdateService.start();
+                logger.info('✅ Instrument exchange rate update service started');
                 
                 // Start price cache cleanup interval (every 30 seconds)
                 setInterval(() => {

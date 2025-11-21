@@ -17,6 +17,7 @@ class Instrument {
     this.minLotSize = data.min_lot_size || null;
     this.maxLotSize = data.max_lot_size || null;
     this.pipValue = data.pip_value || null;
+    this.exchangeRate = data.exchange_rate ?? null;
     this.createdAt = data.created_at || new Date();
     this.updatedAt = data.updated_at || new Date();
   }
@@ -37,6 +38,7 @@ class Instrument {
       min_lot_size: this.minLotSize,
       max_lot_size: this.maxLotSize,
       pip_value: this.pipValue,
+      exchange_rate: this.exchangeRate,
       created_at: this.createdAt,
       updated_at: this.updatedAt
     };
