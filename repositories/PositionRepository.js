@@ -13,9 +13,6 @@ import TradeRepository from './TradeRepository.js';
 import { OrderType, OrderStatus } from '../enums/orderEnums.js';
 import { OrderSide } from '../enums/orderEnums.js';
 
-const DEFAULT_PIP_SIZE = 0.0001;
-const DEFAULT_PIP_VALUE = 10;
-
 class PositionRepository extends BaseRepository {
   constructor() {
     super('positions');
@@ -441,7 +438,7 @@ class PositionRepository extends BaseRepository {
         return position.pnl;
       }
 
-      // Get instrument pip configuration
+      // Get the instrument to get the contract size
       const instrument = await this.instrumentRepository.findInstrumentById(position.instrumentId);
       
       console.log(`Instrument details for ${position.instrumentId}:`, {
@@ -449,44 +446,64 @@ class PositionRepository extends BaseRepository {
         symbol: instrument?.symbol,
         category: instrument?.category,
         name: instrument?.name,
-        pipSize: instrument?.pipSize,
-        pipValue: instrument?.pipValue
+        contractSize: instrument?.contractSize
       });
       
-      const pipSize = Number(instrument?.pipSize);
-      const pipValue = Number(instrument?.pipValue);
+      // Use the contract_size from the database, fallback to category-based defaults
+      let contractSize = 100000.0; // Default for Forex
+      if (instrument && instrument.contractSize) {
+        contractSize = instrument.contractSize;
+        console.log(`Using contract size from database: ${contractSize}`);
+      } else if (instrument && instrument.category) {
+        console.log(`No contract_size in database, using category-based default for: "${instrument.category}"`);
+        switch (instrument.category) {
+          case InstrumentCategory.FOREX:
+            contractSize = 100000.0;
+            console.log('Using Forex contract size: 100000.0');
+            break;
+          case InstrumentCategory.METAL: // Gold
+            contractSize = 100.0;
+            console.log('Using Metal contract size: 100.0');
+            break;
+          case InstrumentCategory.CRYPTO:
+            contractSize = 1.0;
+            console.log('Using Crypto contract size: 1.0');
+            break;
+          default:
+            contractSize = 1.0;
+            console.log(`Unknown category "${instrument.category}", using default contract size: 1.0`);
+            break;
+        }
+      } else {
+        console.log('No instrument found or no category, using default contract size: 100000.0');
+      }
 
       console.log(`Calculating PnL for position ${position.id}:`);
       console.log(`  Entry price: ${position.entryPrice}`);
       console.log(`  Current price: ${currentPrice}`);
       console.log(`  Position type: ${position.positionType}`);
       console.log(`  Lot size: ${position.lotSize}`);
-      console.log(`  Pip size: ${pipSize}`);
-      console.log(`  Pip value: ${pipValue}`);
-
-      const isValidPipData = Number.isFinite(pipSize) && pipSize > 0 && Number.isFinite(pipValue) && pipValue > 0;
-      if (!isValidPipData) {
-        console.warn(`Instrument ${position.instrumentId} missing pip data. Falling back to defaults (pip size=${DEFAULT_PIP_SIZE}, pip value=${DEFAULT_PIP_VALUE}).`);
-      }
-
-      const effectivePipSize = isValidPipData ? pipSize : DEFAULT_PIP_SIZE;
-      const effectivePipValue = isValidPipData ? pipValue : DEFAULT_PIP_VALUE;
+      console.log(`  Contract size: ${contractSize}`);
 
       let pnl;
       if (position.positionType === 'buy') {
-        pnl = ((currentPrice - position.entryPrice)) * effectivePipValue * position.lotSize;
+        pnl = (currentPrice - position.entryPrice) * position.lotSize * contractSize;
       } else {
-        pnl = ((position.entryPrice - currentPrice)) * effectivePipValue * position.lotSize;
+        pnl = (position.entryPrice - currentPrice) * position.lotSize * contractSize;
       }
 
       console.log(`  Calculated PnL: ${pnl}`);
       return pnl;
     } catch (error) {
       console.error('Error calculating PnL:', error);
-      const priceDifference = position.positionType === 'buy'
-        ? currentPrice - position.entryPrice
-        : position.entryPrice - currentPrice;
-      return (priceDifference) * DEFAULT_PIP_VALUE * position.lotSize;
+      // Fallback to simplified calculation with default contract size
+      const contractSize = 100000.0;
+
+      if (position.positionType === 'buy') {
+        return (currentPrice - position.entryPrice) * position.lotSize * contractSize;
+      } else {
+        return (position.entryPrice - currentPrice) * position.lotSize * contractSize;
+      }
     }
   }
 

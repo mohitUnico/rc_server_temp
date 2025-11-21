@@ -116,7 +116,6 @@ class InstrumentExchangeRateUpdateService {
       let pipValueUpdates = 0;
       let skipped = 0;
       let unsupported = 0;
-      let usdQuoteSkipped = 0;
       let failed = 0;
 
       for (const instrument of instruments) {
@@ -129,11 +128,6 @@ class InstrumentExchangeRateUpdateService {
 
         if (!this.isPairSupported(pair)) {
           unsupported++;
-          continue;
-        }
-
-        if (pair.quote === 'USD') {
-          usdQuoteSkipped++;
           continue;
         }
 
@@ -200,7 +194,7 @@ class InstrumentExchangeRateUpdateService {
 
       const duration = Date.now() - startTime;
       this.logger.info(
-        `Exchange rate update finished in ${duration}ms (exchangeRateUpdates=${exchangeRateUpdates}, pipValueUpdates=${pipValueUpdates}, skipped=${skipped}, unsupported=${unsupported}, usdQuoteSkipped=${usdQuoteSkipped}, failed=${failed})`
+        `Exchange rate update finished in ${duration}ms (exchangeRateUpdates=${exchangeRateUpdates}, pipValueUpdates=${pipValueUpdates}, skipped=${skipped}, unsupported=${unsupported}, failed=${failed})`
       );
     } catch (error) {
       this.logger.error('Unexpected error during exchange rate update:', error);

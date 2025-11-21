@@ -3,11 +3,6 @@
  */
 
 import { PositionType, PositionStatus } from '../enums/positionEnums.js';
-import InstrumentRepository from '../repositories/InstrumentRepository.js';
-
-const DEFAULT_PIP_SIZE = 0.0001;
-const DEFAULT_PIP_VALUE = 10;
-const instrumentRepository = new InstrumentRepository();
 
 class Position {
   constructor(data = {}) {
@@ -103,30 +98,16 @@ class Position {
   /**
    * Calculate current P&L based on current price (matching Flutter _calculateRealtimePnL)
    */
-  async calculatePnL(currentPrice) {
+  calculatePnL(currentPrice, contractSize = 100000.0) {
     if (!currentPrice) {
-      return this.pnl;
+      return this.pnl; // Return stored PnL if no current price
     }
 
-    if (!this.instrumentId) {
-      throw new Error('Instrument ID is required to calculate PnL');
+    if (this.positionType === PositionType.BUY) {
+      return (currentPrice - this.entryPrice) * this.lotSize * contractSize;
+    } else {
+      return (this.entryPrice - currentPrice) * this.lotSize * contractSize;
     }
-
-    const instrument = await instrumentRepository.findInstrumentById(this.instrumentId);
-
-    if (!instrument) {
-      throw new Error(`Instrument not found: ${this.instrumentId}`);
-    }
-
-    const pipSize = Number(instrument.pipSize);
-    const pipValue = Number(instrument.pipValue);
-    const effectivePipSize = Number.isFinite(pipSize) && pipSize > 0 ? pipSize : DEFAULT_PIP_SIZE;
-    const effectivePipValue = Number.isFinite(pipValue) && pipValue > 0 ? pipValue : DEFAULT_PIP_VALUE;
-    const priceDifference = this.positionType === PositionType.BUY
-      ? currentPrice - this.entryPrice
-      : this.entryPrice - currentPrice;
-
-    return priceDifference *effectivePipValue * this.lotSize;
   }
 
   /**
@@ -186,14 +167,14 @@ class Position {
   /**
    * Close position with exit price
    */
-  async closePosition(exitPrice) {
+  closePosition(exitPrice) {
     this.exitPrice = exitPrice;
     this.status = PositionStatus.CLOSED;
     this.closedAt = new Date();
     this.updatedAt = new Date();
     
     // Calculate final P&L
-    this.pnl = await this.calculatePnL(exitPrice);
+    this.pnl = this.calculatePnL(exitPrice);
   }
 }
 

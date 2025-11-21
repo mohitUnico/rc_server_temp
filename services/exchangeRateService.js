@@ -71,4 +71,3 @@ const exchangeRateService = new ExchangeRateService();
 
 export { exchangeRateService as default, SUPPORTED_CURRENCIES };
 
-
