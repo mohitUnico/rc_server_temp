@@ -11,9 +11,109 @@ export class EmailService {
                 pass: process.env.EMAIL_APP_PASSWORD // Gmail App Password (not regular password)
             }
         });
+
+        // Rate limiting configuration
+        this.emailQueue = [];
+        this.isProcessing = false;
+        this.lastEmailTime = 0;
+
+        // Configure based on Gmail type (adjust these values as needed)
+        this.config = {
+            minDelayBetweenEmails: parseInt(process.env.EMAIL_MIN_DELAY) || 2000, // 2 seconds between emails
+            maxRetries: parseInt(process.env.EMAIL_MAX_RETRIES) || 3,
+            initialRetryDelay: parseInt(process.env.EMAIL_INITIAL_RETRY_DELAY) || 5000, // 5 seconds
+            maxRetryDelay: parseInt(process.env.EMAIL_MAX_RETRY_DELAY) || 60000, // 60 seconds
+        };
     }
 
-    // Send trading credentials via email
+    // Add email to queue with rate limiting
+    async queueEmail(emailOptions) {
+        return new Promise((resolve, reject) => {
+            this.emailQueue.push({ emailOptions, resolve, reject, retries: 0 });
+            if (!this.isProcessing) {
+                this.processQueue();
+            }
+        });
+    }
+
+    // Process email queue with rate limiting
+    async processQueue() {
+        if (this.isProcessing || this.emailQueue.length === 0) {
+            return;
+        }
+
+        this.isProcessing = true;
+
+        while (this.emailQueue.length > 0) {
+            const { emailOptions, resolve, reject, retries } = this.emailQueue.shift();
+
+            // Rate limiting: wait if we sent an email recently
+            const now = Date.now();
+            const timeSinceLastEmail = now - this.lastEmailTime;
+            if (timeSinceLastEmail < this.config.minDelayBetweenEmails) {
+                const waitTime = this.config.minDelayBetweenEmails - timeSinceLastEmail;
+                console.log(`⏳ Rate limiting: waiting ${waitTime}ms before sending next email`);
+                await this.sleep(waitTime);
+            }
+
+            try {
+                // Try to send the email
+                const info = await this.transporter.sendMail(emailOptions);
+                this.lastEmailTime = Date.now();
+                resolve({
+                    success: true,
+                    messageId: info.messageId,
+                    message: 'Email sent successfully'
+                });
+            } catch (error) {
+                // Handle rate limit errors (429) with exponential backoff
+                if (error.responseCode === 429 || error.message.includes('rate limit') || error.message.includes('429')) {
+                    if (retries < this.config.maxRetries) {
+                        const retryDelay = Math.min(
+                            this.config.initialRetryDelay * Math.pow(2, retries),
+                            this.config.maxRetryDelay
+                        );
+
+                        console.log(`⚠️ Rate limit hit (429). Retry ${retries + 1}/${this.config.maxRetries} after ${retryDelay}ms`);
+
+                        // Re-queue the email at the front with updated retry count
+                        this.emailQueue.unshift({
+                            emailOptions,
+                            resolve,
+                            reject,
+                            retries: retries + 1
+                        });
+
+                        // Wait before processing next email
+                        await this.sleep(retryDelay);
+                    } else {
+                        console.error(`❌ Max retries (${this.config.maxRetries}) exceeded for email`);
+                        reject({
+                            success: false,
+                            error: 'Rate limit exceeded. Max retries reached.',
+                            originalError: error.message
+                        });
+                    }
+                } else {
+                    // Other errors
+                    console.error('❌ Email send error:', error);
+                    reject({
+                        success: false,
+                        error: error.message
+                    });
+                }
+            }
+        }
+
+        this.isProcessing = false;
+    }
+
+    // Helper function to sleep/delay
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // Send trading credentials via email (now with rate limiting and retry logic)
     async sendTradingCredentials(emailID, tradingID, tradingPassword) {
         try {
             // Email template
@@ -109,15 +209,15 @@ export class EmailService {
                 }]
             };
 
-            // Send email
-            const info = await this.transporter.sendMail(mailOptions);
+            // Use queue system with rate limiting and retry logic
+            const result = await this.queueEmail(mailOptions);
 
             console.log(`✅ Email sent successfully to ${emailID}`);
-            console.log(`📧 Message ID: ${info.messageId}`);
+            console.log(`📧 Message ID: ${result.messageId}`);
 
             return {
                 success: true,
-                messageId: info.messageId,
+                messageId: result.messageId,
                 message: 'Trading credentials sent successfully'
             };
 
@@ -126,7 +226,7 @@ export class EmailService {
 
             return {
                 success: false,
-                error: error.message,
+                error: error.error || error.message,
                 message: 'Failed to send trading credentials'
             };
         }
@@ -149,7 +249,15 @@ export class EmailService {
         return {
             service: 'gmail',
             user: process.env.EMAIL_USER ? 'Configured' : 'Not configured',
-            appPassword: process.env.EMAIL_APP_PASSWORD ? 'Configured' : 'Not configured'
+            appPassword: process.env.EMAIL_APP_PASSWORD ? 'Configured' : 'Not configured',
+            queueLength: this.emailQueue.length,
+            isProcessing: this.isProcessing,
+            rateLimitConfig: {
+                minDelayBetweenEmails: `${this.config.minDelayBetweenEmails}ms`,
+                maxRetries: this.config.maxRetries,
+                initialRetryDelay: `${this.config.initialRetryDelay}ms`,
+                maxRetryDelay: `${this.config.maxRetryDelay}ms`
+            }
         };
     }
 }
