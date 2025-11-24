@@ -17,7 +17,7 @@ export class ForexSubscriptionService {
         // TEMPORARY: Limit to 3 symbols for testing
         // TODO: Revert this change to use all symbols
         // Original code: this.allSymbols = getAllForexSymbols();
-        this.allSymbols = ['XAUUSD', 'GBPUSD', 'USDJPY']; // Only 3 symbols for testing (including XAUUSD)
+        this.allSymbols = ['XAUUSD', 'EURUSD', 'USDJPY']; // Only 3 symbols for testing (including XAUUSD)
 
         // Get all 80 forex symbols from configuration (COMMENTED OUT - TEMPORARY)
         // this.allSymbols = getAllForexSymbols();
