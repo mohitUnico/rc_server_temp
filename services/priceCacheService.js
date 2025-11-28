@@ -214,6 +214,29 @@ class PriceCacheService {
   }
 
   /**
+   * Get the last known raw price data for a symbol (without staleness checks)
+   * Returns the full internal price data object: { price, timestamp, data }
+   */
+  getPriceData(assetType, symbol) {
+    try {
+      if (!this.priceCache[assetType]) {
+        return null;
+      }
+
+      const priceData = this.priceCache[assetType].get(symbol);
+      if (!priceData) {
+        return null;
+      }
+
+      // Return a shallow copy to avoid external mutation of internal cache
+      return { ...priceData };
+    } catch (error) {
+      logger.error(`Error getting price data for ${symbol} (${assetType}):`, error);
+      return null;
+    }
+  }
+
+  /**
    * Get current price for a symbol by instrument ID
    * This requires looking up the symbol from the instrument ID
    */

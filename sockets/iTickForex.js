@@ -1,11 +1,18 @@
 import WebSocket from 'ws';
 import { WebSocketManager } from '../websocket/WebSocketManager.js';
 import { WebSocketConfig } from '../config/websocket.js';
-import { getClientsForSymbol, removeClientFromSymbol } from '../utils/subscriptionManager.js';
+import { getClientsForSymbol, removeClientFromSymbol, getAllSubscriptions } from '../utils/subscriptionManager.js';
 import priceCacheService from '../services/priceCacheService.js';
 import forexSubscriptionService from '../services/forexSubscriptionService.js';
 
+// Threshold after which we consider that no new data is coming from iTick
+const INACTIVITY_THRESHOLD_MS = 5000; // 5 seconds
+// How often we will push cached data to Flutter clients while upstream is idle
+const CACHE_BROADCAST_INTERVAL_MS = 1000; // 1 second
+
 let forexManager = null;
+let lastMessageTime = null;
+let cacheBroadcastInterval = null;
 
 export async function connectToForex() {
     if (!forexManager) {
@@ -13,12 +20,16 @@ export async function connectToForex() {
 
         // Set up message handler for incoming data
         forexManager.onMessage(async (message, assetType) => {
+            let symbol;
             try {
                 // Extract symbol and price from message
-                const symbol = message.data?.s;           // Symbol (e.g., 'EURUSD')
-                const lastPrice = message.data?.ld;       // Last price (e.g., 1.0850)
+                symbol = message.data?.s;           // Symbol (e.g., 'EURUSD')
+                const lastPrice = message.data?.ld; // Last price (e.g., 1.0850)
 
                 if (symbol && lastPrice !== undefined) {
+                    // Update "last live message" timestamp
+                    lastMessageTime = Date.now();
+
                     // Update price cache for trading monitor services
                     priceCacheService.updatePrice(assetType, symbol, lastPrice, message.data);
 
@@ -40,7 +51,7 @@ export async function connectToForex() {
                 if (clients && clients.size > 0) {
                     // Send data to all subscribed clients
                     for (const client of clients) {
-                        if (client.readyState === 1) { // WebSocket.OPEN
+                        if (client.readyState === WebSocket.OPEN) {
                             try {
                                 client.send(JSON.stringify(message));
                             } catch (error) {
@@ -74,9 +85,77 @@ export async function connectToForex() {
         } catch (error) {
             console.error('Failed to subscribe to forex symbols:', error);
         }
+
+        // Start cache-based broadcast loop so Flutter clients keep receiving data
+        // even when iTick temporarily stops sending updates
+        if (!cacheBroadcastInterval) {
+            cacheBroadcastInterval = setInterval(() => {
+                broadcastCachedPricesWhenIdle();
+            }, CACHE_BROADCAST_INTERVAL_MS);
+        }
     }
 
     return forexManager;
+}
+
+/**
+ * When the iTick WebSocket is idle for a period of time, use the last
+ * cached prices from priceCacheService and stream them to all subscribed
+ * Flutter clients. This ensures clients still get data if upstream is quiet.
+ */
+function broadcastCachedPricesWhenIdle() {
+    const now = Date.now();
+
+    // If we've seen a live tick recently, skip cache broadcasting
+    if (lastMessageTime && (now - lastMessageTime) < INACTIVITY_THRESHOLD_MS) {
+        return;
+    }
+
+    const subscriptions = getAllSubscriptions();
+    const forexSubscriptions = subscriptions.forex || {};
+
+    // For each subscribed forex symbol, push the last known cached value
+    for (const [symbol, clientCount] of Object.entries(forexSubscriptions)) {
+        if (!symbol || clientCount <= 0) continue;
+
+        // Get the last known price data from cache (without staleness checks)
+        const priceData = priceCacheService.getPriceData('forex', symbol);
+        if (!priceData || priceData.price === undefined || priceData.price === null) {
+            continue;
+        }
+
+        const clients = getClientsForSymbol('forex', symbol);
+        if (!clients || clients.size === 0) continue;
+
+        // Build a message that is compatible with the live iTick payload,
+        // but explicitly marked as coming from cache.
+        const message = {
+            resAc: 'quote',
+            source: 'cache',
+            assetType: 'forex',
+            data: {
+                // Preserve original data if we have it
+                ...(priceData.data || {}),
+                s: symbol,
+                ld: priceData.price,
+                ts: priceData.timestamp
+            }
+        };
+
+        for (const client of clients) {
+            if (client.readyState === WebSocket.OPEN) {
+                try {
+                    client.send(JSON.stringify(message));
+                } catch (error) {
+                    console.error(`Error sending cached message to client for ${symbol}:`, error);
+                }
+            }
+        }
+
+        if (forexManager && forexManager.logger) {
+            forexManager.logger.debug(`Broadcasted cached ${symbol} data to ${clients.size} clients (upstream idle)`);
+        }
+    }
 }
 
 export async function subscribeSymbol(symbol) {
