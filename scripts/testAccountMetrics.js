@@ -14,10 +14,10 @@ async function testAccountMetrics() {
     // Test 1: Start the service
     logger.info('=== Test 1: Starting account metrics service ===');
     accountMetricsService.start();
-    
+
     // Wait a bit to see the service running
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
+
     // Test 2: Check service status
     logger.info('=== Test 2: Checking service status ===');
     const status = accountMetricsService.getStatus();
@@ -28,7 +28,7 @@ async function testAccountMetrics() {
     priceCacheService.updatePrice('forex', 'EURUSD', 1.0850, { bid: 1.0848, ask: 1.0852 });
     priceCacheService.updatePrice('forex', 'GBPUSD', 1.2650, { bid: 1.2648, ask: 1.2652 });
     priceCacheService.updatePrice('crypto', 'BTCUSD', 65000.00, { bid: 64980, ask: 65020 });
-    
+
     logger.info('Added test prices to cache');
 
     // Test 4: Trigger manual update
@@ -41,7 +41,7 @@ async function testAccountMetrics() {
     try {
       const allMetrics = await accountMetricsService.getAllAccountsMetrics();
       logger.info(`Found metrics for ${allMetrics.length} accounts`);
-      
+
       if (allMetrics.length > 0) {
         logger.info('Sample account metrics:', JSON.stringify(allMetrics[0], null, 2));
       }
@@ -64,13 +64,13 @@ async function testAccountMetrics() {
     logger.info('=== Test 7: Testing update interval change ===');
     accountMetricsService.setUpdateInterval(2000); // Change to 2 seconds
     logger.info('Updated interval to 2 seconds');
-    
+
     await new Promise(resolve => setTimeout(resolve, 3000));
 
     // Test 8: Stop the service
     logger.info('=== Test 8: Stopping account metrics service ===');
     accountMetricsService.stop();
-    
+
     // Test 9: Check final status
     logger.info('=== Test 9: Final status check ===');
     const finalStatus = accountMetricsService.getStatus();
@@ -136,7 +136,10 @@ async function testPositionMetrics() {
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Test position metrics calculation
-    const positionMetrics = await accountMetricsService.calculatePositionMetrics(mockPosition);
+    const positionMetrics = await accountMetricsService.calculatePositionMetrics(
+      mockPosition,
+      mockAccount
+    );
     logger.info('Position metrics:', JSON.stringify(positionMetrics, null, 2));
 
     // Stop service

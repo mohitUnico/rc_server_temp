@@ -4,6 +4,8 @@ import TradingAccountRepository from '../repositories/TradingAccountRepository.j
 import PositionRepository from '../repositories/PositionRepository.js';
 import InstrumentRepository from '../repositories/InstrumentRepository.js';
 import TradingAccount from '../models/TradingAccount.js';
+import { InstrumentCategory } from '../enums/instrumentEnums.js';
+import { getConversionRate, getForexQuotes } from '../utils/fxConversion.js';
 
 const logger = new Logger('AccountMetricsService');
 const tradingAccountRepository = new TradingAccountRepository();
@@ -117,7 +119,7 @@ class AccountMetricsService {
 
       // Calculate unrealized P&L and margin for each open position
       for (const position of openPositions) {
-        const positionMetrics = await this.calculatePositionMetrics(position);
+        const positionMetrics = await this.calculatePositionMetrics(position, account);
         totalUnrealizedPnL += positionMetrics.unrealizedPnL;
         totalMarginUsed += positionMetrics.marginUsed;
       }
@@ -160,7 +162,7 @@ class AccountMetricsService {
   /**
    * Calculate metrics for a single position
    */
-  async calculatePositionMetrics(position) {
+  async calculatePositionMetrics(position, account = null) {
     try {
       // Get current price for the instrument
       const currentPrice = await priceCacheService.getCurrentPriceByInstrumentId(position.instrumentId);
@@ -173,27 +175,63 @@ class AccountMetricsService {
         };
       }
 
-      // Get instrument details for pip_value
+      // Get instrument details for symbol and contract size
       const instrument = await instrumentRepository.findInstrumentById(position.instrumentId);
       
-      if (!instrument || !instrument.pipValue || instrument.pipValue <= 0) {
-        logger.warn(`Invalid or missing pip_value for instrument ${position.instrumentId}, returning 0 unrealized PnL`);
+      if (!instrument) {
+        logger.warn(`Instrument not found for position ${position.id}, returning 0 unrealized PnL`);
         return {
           unrealizedPnL: 0,
           marginUsed: position.marginUsed || 0
         };
       }
 
-      // Calculate price difference
-      let priceDifference;
-      if (position.positionType === 'buy') {
-        priceDifference = currentPrice - position.entryPrice;
-      } else {
-        priceDifference = position.entryPrice - currentPrice;
+      const accountCurrency = account?.currency || 'USD';
+      const symbol = (instrument.symbol || '').toUpperCase();
+      const baseCurrency = symbol.slice(0, 3);
+      const quoteCurrency = symbol.slice(3, 6);
+
+      // Calculate direction and price difference
+      const dir = position.positionType === 'buy' ? 1 : -1;
+      const priceDifference = (currentPrice - position.entryPrice) * dir;
+
+      // Determine contract size: prefer DB column, fallback by category
+      let contractSize = Number(instrument.contractSize);
+      if (!Number.isFinite(contractSize) || contractSize <= 0) {
+        switch (instrument.category) {
+          case InstrumentCategory.FOREX:
+            contractSize = 100000.0;
+            break;
+          case InstrumentCategory.METAL:
+            contractSize = 100.0;
+            break;
+          case InstrumentCategory.CRYPTO:
+            contractSize = 1.0;
+            break;
+          case InstrumentCategory.INDEX:
+          default:
+            contractSize = 1.0;
+            break;
+        }
       }
 
-      // Formula: Profit = Price Difference × Pip Value × Lot_size
-      const unrealizedPnL = priceDifference * instrument.pipValue * position.lotSize;
+      // Unrealized PnL in quote currency
+      let unrealizedPnL = priceDifference * contractSize * position.lotSize;
+
+      // Convert from quote currency to account currency if needed
+      if (quoteCurrency && accountCurrency && quoteCurrency !== accountCurrency) {
+        try {
+          const quotes = getForexQuotes();
+          const R = getConversionRate(quoteCurrency, accountCurrency, quotes);
+          unrealizedPnL = unrealizedPnL * R;
+        } catch (fxError) {
+          logger.error(
+            `Failed to get FX rate for unrealized PnL conversion (${quoteCurrency} -> ${accountCurrency}) for position ${position.id}:`,
+            fxError
+          );
+          // Fall back to treating quote == account currency
+        }
+      }
 
       // Use the margin used from the position, or calculate if not available
       const marginUsed = position.marginUsed || this.calculateMarginUsed(position, position.entryPrice);

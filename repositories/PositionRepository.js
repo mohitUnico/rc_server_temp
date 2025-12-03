@@ -12,6 +12,7 @@ import OrderRepository from './OrderRepository.js';
 import TradeRepository from './TradeRepository.js';
 import { OrderType, OrderStatus } from '../enums/orderEnums.js';
 import { OrderSide } from '../enums/orderEnums.js';
+import { getConversionRate, getForexQuotes } from '../utils/fxConversion.js';
 
 class PositionRepository extends BaseRepository {
   constructor() {
@@ -42,11 +43,11 @@ class PositionRepository extends BaseRepository {
 
       // Calculate margin used if not provided
       let calculatedMarginUsed = await this.calculateRequiredMargin({
-          accountId,
-          instrumentId,
-          lotSize,
-          entryPrice
-        });
+        accountId,
+        instrumentId,
+        lotSize,
+        entryPrice
+      });
 
       const data = {
         id: positionId,
@@ -131,13 +132,13 @@ class PositionRepository extends BaseRepository {
     try {
       // Get the trading account to get leverage - try both ID and UID approaches
       let account = await this.tradingAccountRepository.findTradingAccountById(accountId);
-      
+
       // If not found by ID, try by UID (since accountId might actually be a UID)
       if (!account) {
         console.log(`Account not found by ID ${accountId}, trying by UID...`);
         account = await this.tradingAccountRepository.findTradingAccountByUid(accountId);
       }
-      
+
       if (!account) {
         throw new Error(`Trading account not found by ID or UID: ${accountId}`);
       }
@@ -226,7 +227,7 @@ class PositionRepository extends BaseRepository {
    */
   async findOpenPositionsByAccountId(accountId, options = {}) {
     try {
-      const filters = { 
+      const filters = {
         account_id: accountId,
         status: PositionStatus.OPEN
       };
@@ -247,7 +248,7 @@ class PositionRepository extends BaseRepository {
    */
   async findClosedPositionsByAccountId(accountId, options = {}) {
     try {
-      const filters = { 
+      const filters = {
         account_id: accountId,
         status: PositionStatus.CLOSED
       };
@@ -429,7 +430,15 @@ class PositionRepository extends BaseRepository {
   }
 
   /**
-   * Calculate PnL for a position using formula: Profit = Price Difference × Pip Value × Lot_size
+   * Calculate PnL for a position using formula:
+   *   priceDiff      = (P_cur - P_open) * dir
+   *   PnL_quote_ccy  = priceDiff * contractSize * lotSize
+   *   PnL_account_ccy = PnL_quote_ccy * R
+   *
+   * Where:
+   *   - dir = +1 for buy, -1 for sell
+   *   - contractSize comes from instruments.contract_size (with sensible defaults)
+   *   - R is FX rate from quote currency -> account currency using cached forex quotes
    */
   async calculatePnL(position, currentPrice) {
     try {
@@ -438,38 +447,85 @@ class PositionRepository extends BaseRepository {
         return position.pnl;
       }
 
-      // Get the instrument to get pip_value
+      // Get the instrument for symbol and contract size
       const instrument = await this.instrumentRepository.findInstrumentById(position.instrumentId);
-      
+
       if (!instrument) {
         throw new Error(`Instrument not found: ${position.instrumentId}`);
       }
 
-      if (!instrument.pipValue || instrument.pipValue <= 0) {
-        throw new Error(`Invalid pip_value for instrument ${position.instrumentId}: ${instrument.pipValue}`);
+      // Get account to determine account currency (try both ID and UID)
+      let account = await this.tradingAccountRepository.findTradingAccountById(position.accountId);
+      if (!account) {
+        account = await this.tradingAccountRepository.findTradingAccountByUid(position.accountId);
       }
 
+      const accountCurrency = account?.currency || 'USD';
+
+      const symbol = (instrument.symbol || '').toUpperCase();
+      const baseCurrency = symbol.slice(0, 3);
+      const quoteCurrency = symbol.slice(3, 6);
+
       console.log(`Calculating PnL for position ${position.id}:`);
+      console.log(`  Symbol: ${symbol}`);
       console.log(`  Entry price: ${position.entryPrice}`);
       console.log(`  Current price: ${currentPrice}`);
       console.log(`  Position type: ${position.positionType}`);
       console.log(`  Lot size: ${position.lotSize}`);
-      console.log(`  Pip value: ${instrument.pipValue}`);
+      console.log(`  Account currency: ${accountCurrency}`);
+      console.log(`  Parsed base/quote: ${baseCurrency}/${quoteCurrency}`);
 
-      // Calculate price difference
-      let priceDifference;
-      if (position.positionType === 'buy') {
-        priceDifference = currentPrice - position.entryPrice;
-      } else {
-        priceDifference = position.entryPrice - currentPrice;
+      // Calculate direction and price difference
+      const dir = position.positionType === 'buy' ? 1 : -1;
+      const priceDifference = (currentPrice - position.entryPrice) * dir;
+
+      // Determine contract size: prefer DB column, fallback by category
+      let contractSize = Number(instrument.contractSize);
+      if (!Number.isFinite(contractSize) || contractSize <= 0) {
+        switch (instrument.category) {
+          case InstrumentCategory.FOREX:
+            contractSize = 100000.0;
+            break;
+          case InstrumentCategory.METAL:
+            contractSize = 100.0;
+            break;
+          case InstrumentCategory.CRYPTO:
+            contractSize = 1.0;
+            break;
+          case InstrumentCategory.INDEX:
+          default:
+            contractSize = 1.0;
+            break;
+        }
       }
 
-      // Formula: Profit = Price Difference × Pip Value × Lot_size
-      const pnl = priceDifference * instrument.pipValue * position.lotSize;
+      // PnL in quote currency
+      const pnlInQuote = priceDifference * contractSize * position.lotSize;
+
+      // Convert from quote currency to account currency if needed
+      let pnlInAccount = pnlInQuote;
+      if (quoteCurrency && accountCurrency && quoteCurrency !== accountCurrency) {
+        try {
+          const quotes = getForexQuotes();
+          const R = getConversionRate(quoteCurrency, accountCurrency, quotes);
+          console.log(`  FX rate ${quoteCurrency}->${accountCurrency}: ${R}`);
+          pnlInAccount = pnlInQuote * R;
+        } catch (fxError) {
+          console.error(
+            `  Warning: Failed to get FX rate from ${quoteCurrency} to ${accountCurrency}:`,
+            fxError
+          );
+          // Fall back to treating quote == account currency
+          pnlInAccount = pnlInQuote;
+        }
+      }
 
       console.log(`  Price difference: ${priceDifference}`);
-      console.log(`  Calculated PnL: ${pnl}`);
-      return pnl;
+      console.log(`  Contract size: ${contractSize}`);
+      console.log(`  PnL in quote currency: ${pnlInQuote}`);
+      console.log(`  Final PnL in account currency: ${pnlInAccount}`);
+
+      return pnlInAccount;
     } catch (error) {
       console.error('Error calculating PnL:', error);
       throw error;
@@ -483,7 +539,7 @@ class PositionRepository extends BaseRepository {
     try {
       const result = await this.findById(id);
       if (!result) return null;
-      
+
       const position = Position.fromDatabase(result);
       return await this.enrichPositionWithInstrumentDetails(position);
     } catch (error) {
@@ -582,9 +638,9 @@ class PositionRepository extends BaseRepository {
         // Just log the error for debugging
       }
 
-      return { 
-        closedPosition: Position.fromDatabase(closedPosition), 
-        openPosition: Position.fromDatabase(updatedPosition) 
+      return {
+        closedPosition: Position.fromDatabase(closedPosition),
+        openPosition: Position.fromDatabase(updatedPosition)
       };
     } catch (error) {
       console.error('Error partially closing position:', error);
@@ -671,7 +727,7 @@ class PositionRepository extends BaseRepository {
       const result = await this.findAll(filters, options);
       const positions = result.map(position => Position.fromDatabase(position));
       const enrichedPositions = await this.enrichPositionsWithInstrumentDetails(positions);
-      
+
       const totalCount = await this.count(filters);
       const totalPages = Math.ceil(totalCount / limit);
 
@@ -698,7 +754,7 @@ class PositionRepository extends BaseRepository {
   async getPositionStatistics(accountId = null) {
     try {
       const filters = accountId ? { account_id: accountId } : {};
-      
+
       const allPositions = await this.findAll(filters);
       const positions = allPositions.map(position => Position.fromDatabase(position));
 
@@ -752,9 +808,9 @@ class PositionRepository extends BaseRepository {
       // Import InstrumentRepository dynamically to avoid circular dependencies
       const { default: InstrumentRepository } = await import('./InstrumentRepository.js');
       const instrumentRepo = new InstrumentRepository();
-      
+
       const instrument = await instrumentRepo.findInstrumentById(position.instrumentId);
-      
+
       if (instrument) {
         // Add instrument details to the position object while preserving the Position model instance
         position.instrument = {
@@ -765,7 +821,7 @@ class PositionRepository extends BaseRepository {
           status: instrument.status
         };
       }
-      
+
       return position;
     } catch (error) {
       console.error('Error enriching position with instrument details:', error);
@@ -785,10 +841,10 @@ class PositionRepository extends BaseRepository {
       // Import InstrumentRepository dynamically to avoid circular dependencies
       const { default: InstrumentRepository } = await import('./InstrumentRepository.js');
       const instrumentRepo = new InstrumentRepository();
-      
+
       // Get unique instrument IDs to minimize database queries
       const instrumentIds = [...new Set(positions.map(position => position.instrumentId).filter(id => id))];
-      
+
       // Fetch all instruments in one query
       const instruments = {};
       for (const instrumentId of instrumentIds) {
@@ -803,14 +859,14 @@ class PositionRepository extends BaseRepository {
           };
         }
       }
-      
+
       // Enrich each position with instrument details while preserving Position model instances
       positions.forEach(position => {
         if (position.instrumentId && instruments[position.instrumentId]) {
           position.instrument = instruments[position.instrumentId];
         }
       });
-      
+
       return positions;
     } catch (error) {
       console.error('Error enriching positions with instrument details:', error);
