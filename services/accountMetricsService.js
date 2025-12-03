@@ -50,7 +50,7 @@ class AccountMetricsService {
 
     logger.info('Stopping account metrics service');
     this.isRunning = false;
-    
+
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
       this.updateInterval = null;
@@ -64,7 +64,7 @@ class AccountMetricsService {
     try {
       // Get all active trading accounts
       const activeAccounts = await tradingAccountRepository.findActiveTradingAccounts();
-      
+
       if (activeAccounts.length === 0) {
         return; // No active accounts to update
       }
@@ -94,13 +94,13 @@ class AccountMetricsService {
 
       // Get all open positions for this account
       const openPositions = await positionRepository.findOpenPositionsByAccountId(accountUid);
-      
+
       // Calculate account metrics
       const metrics = await this.calculateAccountMetrics(account, openPositions);
-      
+
       // Update the account with new metrics
       await this.updateAccountWithMetrics(accountUid, metrics);
-      
+
       logger.debug(`Updated metrics for account ${accountUid}: Equity=${metrics.equity}, Margin=${metrics.margin}, FreeMargin=${metrics.freeMargin}`);
 
     } catch (error) {
@@ -166,7 +166,7 @@ class AccountMetricsService {
     try {
       // Get current price for the instrument
       const currentPrice = await priceCacheService.getCurrentPriceByInstrumentId(position.instrumentId);
-      
+
       if (!currentPrice) {
         // If no current price, use entry price (no unrealized P&L)
         return {
@@ -177,7 +177,7 @@ class AccountMetricsService {
 
       // Get instrument details for symbol and contract size
       const instrument = await instrumentRepository.findInstrumentById(position.instrumentId);
-      
+
       if (!instrument) {
         logger.warn(`Instrument not found for position ${position.id}, returning 0 unrealized PnL`);
         return {
@@ -218,12 +218,31 @@ class AccountMetricsService {
       // Unrealized PnL in quote currency
       let unrealizedPnL = priceDifference * contractSize * position.lotSize;
 
+      logger.info(
+        `[Unrealized PnL DEBUG] positionId=${position.id} ` +
+        `symbol=${symbol} base=${baseCurrency} quote=${quoteCurrency} ` +
+        `accountCurrency=${accountCurrency} ` +
+        `entryPrice=${position.entryPrice} currentPrice=${currentPrice} ` +
+        `dir=${dir} priceDiff=${priceDifference} ` +
+        `lotSize=${position.lotSize} contractSize=${contractSize} ` +
+        `pnlQuoteBeforeFx=${unrealizedPnL}`
+      );
+
       // Convert from quote currency to account currency if needed
       if (quoteCurrency && accountCurrency && quoteCurrency !== accountCurrency) {
         try {
           const quotes = getForexQuotes();
           const R = getConversionRate(quoteCurrency, accountCurrency, quotes);
+
+          logger.info(
+            `[Unrealized PnL DEBUG] FX conversion ${quoteCurrency}->${accountCurrency} R=${R}`
+          );
+
           unrealizedPnL = unrealizedPnL * R;
+
+          logger.info(
+            `[Unrealized PnL DEBUG] pnlAccountAfterFx=${unrealizedPnL}`
+          );
         } catch (fxError) {
           logger.error(
             `Failed to get FX rate for unrealized PnL conversion (${quoteCurrency} -> ${accountCurrency}) for position ${position.id}:`,
@@ -235,6 +254,11 @@ class AccountMetricsService {
 
       // Use the margin used from the position, or calculate if not available
       const marginUsed = position.marginUsed || this.calculateMarginUsed(position, position.entryPrice);
+
+      logger.info(
+        `[Unrealized PnL DEBUG] final metrics: positionId=${position.id} ` +
+        `symbol=${symbol} unrealizedPnL=${unrealizedPnL} marginUsed=${marginUsed}`
+      );
 
       return {
         unrealizedPnL,
@@ -277,7 +301,7 @@ class AccountMetricsService {
       };
 
       const result = await tradingAccountRepository.updateByField('account_uid', accountUid, updateData);
-      
+
       if (result) {
         logger.debug(`Successfully updated metrics for account ${accountUid}`);
         return TradingAccount.fromDatabase(result);
@@ -364,10 +388,10 @@ class AccountMetricsService {
 
       // Update metrics first to get current free margin
       await this.updateAccountMetrics(accountUid);
-      
+
       // Get updated account
       const updatedAccount = await tradingAccountRepository.findTradingAccountByUid(accountUid);
-      
+
       return {
         hasSufficientMargin: updatedAccount.freeMargin >= requiredMargin,
         freeMargin: updatedAccount.freeMargin,
@@ -414,7 +438,7 @@ class AccountMetricsService {
       logger.warn('Service is not running, cannot trigger update');
       return;
     }
-    
+
     logger.info('Manually triggering account metrics update');
     await this.updateAllAccountMetrics();
   }
@@ -427,7 +451,7 @@ class AccountMetricsService {
       logger.warn('Service is not running, cannot trigger update');
       return;
     }
-    
+
     logger.info(`Manually triggering account metrics update for account ${accountUid}`);
     await this.updateAccountMetrics(accountUid);
   }

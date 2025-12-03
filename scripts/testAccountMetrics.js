@@ -142,6 +142,22 @@ async function testPositionMetrics() {
     );
     logger.info('Position metrics:', JSON.stringify(positionMetrics, null, 2));
 
+    // Manual debug calculation for comparison (EURUSD example)
+    const manualPcur = 1.0850;
+    const manualPopen = mockPosition.entryPrice;
+    const manualDir = mockPosition.positionType === 'buy' ? 1 : -1;
+    const manualPriceDiff = (manualPcur - manualPopen) * manualDir;
+    const manualContractSize = 100000; // EURUSD contract size
+    const manualLots = mockPosition.lotSize;
+    const manualPnlQuote = manualPriceDiff * manualContractSize * manualLots;
+
+    logger.info(
+      `[Test DEBUG] symbol=EURUSD entryPrice=${manualPopen} currentPrice=${manualPcur} ` +
+      `dir=${manualDir} priceDiff=${manualPriceDiff} ` +
+      `lotSize=${manualLots} contractSize=${manualContractSize} ` +
+      `manualPnlQuote=${manualPnlQuote}`
+    );
+
     // Stop service
     accountMetricsService.stop();
 
