@@ -14,6 +14,12 @@ import { OrderType, OrderStatus } from '../enums/orderEnums.js';
 import { OrderSide } from '../enums/orderEnums.js';
 import { getConversionRate, getForexQuotes } from '../utils/fxConversion.js';
 
+// Use the same LOG_ENABLED flag as the Logger utility to control noisy trade logs
+const LOG_ENABLED = !(
+  process.env.LOG_ENABLED === 'false' ||
+  process.env.LOG_ENABLED === '0'
+);
+
 class PositionRepository extends BaseRepository {
   constructor() {
     super('positions');
@@ -283,7 +289,9 @@ class PositionRepository extends BaseRepository {
    */
   async closePosition({ positionId, exitPrice, pnl }) {
     try {
-      console.log(`Closing position ${positionId} with exit price ${exitPrice} and PnL ${pnl}`);
+      if (LOG_ENABLED) {
+        console.log(`Closing position ${positionId} with exit price ${exitPrice} and PnL ${pnl}`);
+      }
 
       // Get the position first to get account ID and calculate balance update
       const position = await this.findPositionById(positionId);
@@ -291,19 +299,21 @@ class PositionRepository extends BaseRepository {
         throw new Error('Position not found');
       }
 
-      console.log(`Found position for account: ${position.accountId}`);
-      console.log('Position details:');
-      console.log(`  Entry price: ${position.entryPrice}`);
-      console.log(`  Exit price: ${exitPrice}`);
-      console.log(`  Position type: ${position.positionType}`);
-      console.log(`  Lot size: ${position.lotSize}`);
+      if (LOG_ENABLED) {
+        console.log(`Found position for account: ${position.accountId}`);
+        console.log('Position details:');
+        console.log(`  Entry price: ${position.entryPrice}`);
+        console.log(`  Exit price: ${exitPrice}`);
+        console.log(`  Position type: ${position.positionType}`);
+        console.log(`  Lot size: ${position.lotSize}`);
+      }
 
       // If PnL is not provided, calculate it using the exit price as current price
       if (pnl === undefined) {
         pnl = await this.calculatePnL(position, exitPrice);
-        console.log(`Calculated PnL: ${pnl}`);
+        if (LOG_ENABLED) console.log(`Calculated PnL: ${pnl}`);
       } else {
-        console.log(`Using provided PnL: ${pnl}`);
+        if (LOG_ENABLED) console.log(`Using provided PnL: ${pnl}`);
       }
 
       const updates = {
@@ -315,17 +325,23 @@ class PositionRepository extends BaseRepository {
         updated_at: new Date().toISOString()
       };
 
-      console.log('Updating position with data:', updates);
+      if (LOG_ENABLED) console.log('Updating position with data:', updates);
 
       const result = await this.updateById(positionId, updates);
       const closedPosition = Position.fromDatabase(result);
-      console.log(`Position closed successfully. Saved PnL: ${closedPosition.pnl}, Margin used preserved: ${closedPosition.marginUsed}`);
+      if (LOG_ENABLED) {
+        console.log(
+          `Position closed successfully. Saved PnL: ${closedPosition.pnl}, Margin used preserved: ${closedPosition.marginUsed}`
+        );
+      }
 
       // Create order and trade entries for closing the position
-      console.log(`Creating close order and trade for position ${positionId}`);
+      if (LOG_ENABLED) console.log(`Creating close order and trade for position ${positionId}`);
       try {
         const { closeOrder, trade } = await this.createCloseOrderAndTrade(position, position.lotSize, exitPrice);
-        console.log(`Created close order ${closeOrder.id} and trade ${trade.id} for position ${positionId}`);
+        if (LOG_ENABLED) {
+          console.log(`Created close order ${closeOrder.id} and trade ${trade.id} for position ${positionId}`);
+        }
       } catch (orderTradeError) {
         console.error('Error creating close order and trade:', orderTradeError);
         // Don't throw here - the position is already closed, we don't want to rollback
@@ -333,13 +349,13 @@ class PositionRepository extends BaseRepository {
       }
 
       // Update account balance with the PnL
-      console.log(`Updating balance for account ${position.accountId} with PnL ${pnl}`);
+      if (LOG_ENABLED) console.log(`Updating balance for account ${position.accountId} with PnL ${pnl}`);
       try {
         await this.tradingAccountRepository.updateBalanceByAmountWithUid({
           accountUid: position.accountId,
           amount: pnl
         });
-        console.log(`Successfully updated balance for account ${position.accountId}`);
+        if (LOG_ENABLED) console.log(`Successfully updated balance for account ${position.accountId}`);
       } catch (balanceError) {
         console.error('Error updating balance:', balanceError);
         // Don't throw here - the position is already closed, we don't want to rollback
@@ -358,17 +374,17 @@ class PositionRepository extends BaseRepository {
    */
   async closeAllOpenPositions({ accountId, exitPrices }) {
     try {
-      console.log(`Closing all open positions for account: ${accountId}`);
+      if (LOG_ENABLED) console.log(`Closing all open positions for account: ${accountId}`);
 
       // Get all open positions for the account
       const openPositions = await this.findOpenPositionsByAccountId(accountId);
 
       if (openPositions.length === 0) {
-        console.log(`No open positions found for account: ${accountId}`);
+        if (LOG_ENABLED) console.log(`No open positions found for account: ${accountId}`);
         return [];
       }
 
-      console.log(`Found ${openPositions.length} open positions to close`);
+      if (LOG_ENABLED) console.log(`Found ${openPositions.length} open positions to close`);
 
       const closedPositions = [];
       let totalPnL = 0.0;
@@ -377,13 +393,13 @@ class PositionRepository extends BaseRepository {
       for (const position of openPositions) {
         const positionId = position.id;
         if (!positionId) {
-          console.log('Skipping position with null ID');
+          if (LOG_ENABLED) console.log('Skipping position with null ID');
           continue;
         }
 
         const exitPrice = exitPrices[positionId];
         if (exitPrice === undefined) {
-          console.log(`No exit price provided for position ${positionId}, skipping`);
+          if (LOG_ENABLED) console.log(`No exit price provided for position ${positionId}, skipping`);
           continue;
         }
 
@@ -400,7 +416,7 @@ class PositionRepository extends BaseRepository {
           });
 
           closedPositions.push(closedPosition);
-          console.log(`Successfully closed position ${positionId} with PnL: ${pnl}`);
+          if (LOG_ENABLED) console.log(`Successfully closed position ${positionId} with PnL: ${pnl}`);
         } catch (error) {
           console.error(`Error closing position ${positionId}:`, error);
           // Continue with other positions even if one fails
@@ -414,14 +430,18 @@ class PositionRepository extends BaseRepository {
             accountUid: accountId,
             amount: totalPnL
           });
-          console.log(`Successfully updated balance for account ${accountId} with total PnL: ${totalPnL}`);
+          if (LOG_ENABLED) {
+            console.log(`Successfully updated balance for account ${accountId} with total PnL: ${totalPnL}`);
+          }
         } catch (balanceError) {
           console.error(`Error updating balance for account ${accountId}:`, balanceError);
           // Don't throw here - positions are already closed
         }
       }
 
-      console.log(`Successfully closed ${closedPositions.length} positions for account: ${accountId}`);
+      if (LOG_ENABLED) {
+        console.log(`Successfully closed ${closedPositions.length} positions for account: ${accountId}`);
+      }
       return closedPositions;
     } catch (error) {
       console.error('Error closing all open positions:', error);
@@ -466,14 +486,16 @@ class PositionRepository extends BaseRepository {
       const baseCurrency = symbol.slice(0, 3);
       const quoteCurrency = symbol.slice(3, 6);
 
-      console.log(`Calculating PnL for position ${position.id}:`);
-      console.log(`  Symbol: ${symbol}`);
-      console.log(`  Entry price: ${position.entryPrice}`);
-      console.log(`  Current price: ${currentPrice}`);
-      console.log(`  Position type: ${position.positionType}`);
-      console.log(`  Lot size: ${position.lotSize}`);
-      console.log(`  Account currency: ${accountCurrency}`);
-      console.log(`  Parsed base/quote: ${baseCurrency}/${quoteCurrency}`);
+      if (LOG_ENABLED) {
+        console.log(`Calculating PnL for position ${position.id}:`);
+        console.log(`  Symbol: ${symbol}`);
+        console.log(`  Entry price: ${position.entryPrice}`);
+        console.log(`  Current price: ${currentPrice}`);
+        console.log(`  Position type: ${position.positionType}`);
+        console.log(`  Lot size: ${position.lotSize}`);
+        console.log(`  Account currency: ${accountCurrency}`);
+        console.log(`  Parsed base/quote: ${baseCurrency}/${quoteCurrency}`);
+      }
 
       // Calculate direction and price difference
       const dir = position.positionType === 'buy' ? 1 : -1;
@@ -508,7 +530,7 @@ class PositionRepository extends BaseRepository {
         try {
           const quotes = getForexQuotes();
           const R = getConversionRate(quoteCurrency, accountCurrency, quotes);
-          console.log(`  FX rate ${quoteCurrency}->${accountCurrency}: ${R}`);
+          if (LOG_ENABLED) console.log(`  FX rate ${quoteCurrency}->${accountCurrency}: ${R}`);
           pnlInAccount = pnlInQuote * R;
         } catch (fxError) {
           console.error(
@@ -519,11 +541,12 @@ class PositionRepository extends BaseRepository {
           pnlInAccount = pnlInQuote;
         }
       }
-
-      console.log(`  Price difference: ${priceDifference}`);
-      console.log(`  Contract size: ${contractSize}`);
-      console.log(`  PnL in quote currency: ${pnlInQuote}`);
-      console.log(`  Final PnL in account currency: ${pnlInAccount}`);
+      if (LOG_ENABLED) {
+        console.log(`  Price difference: ${priceDifference}`);
+        console.log(`  Contract size: ${contractSize}`);
+        console.log(`  PnL in quote currency: ${pnlInQuote}`);
+        console.log(`  Final PnL in account currency: ${pnlInAccount}`);
+      }
 
       return pnlInAccount;
     } catch (error) {
