@@ -1,8 +1,11 @@
 // Global flag to enable/disable logging without touching call sites.
-// Set LOG_ENABLED=false (or 0) in .env to silence all logs.
+// Set LOG_ENABLED=false (or 0, off, no) in .env to silence all logs (case-insensitive).
+const rawLogEnabled = (process.env.LOG_ENABLED || '').toString().trim().toLowerCase();
 const LOG_ENABLED = !(
-    process.env.LOG_ENABLED === 'false' ||
-    process.env.LOG_ENABLED === '0'
+    rawLogEnabled === 'false' ||
+    rawLogEnabled === '0' ||
+    rawLogEnabled === 'off' ||
+    rawLogEnabled === 'no'
 );
 
 export class Logger {

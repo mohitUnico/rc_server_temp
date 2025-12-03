@@ -14,10 +14,13 @@ import { OrderType, OrderStatus } from '../enums/orderEnums.js';
 import { OrderSide } from '../enums/orderEnums.js';
 import { getConversionRate, getForexQuotes } from '../utils/fxConversion.js';
 
-// Use the same LOG_ENABLED flag as the Logger utility to control noisy trade logs
+// Use the same LOG_ENABLED semantics as Logger (case-insensitive false/0/off/no)
+const rawLogEnabledRepo = (process.env.LOG_ENABLED || '').toString().trim().toLowerCase();
 const LOG_ENABLED = !(
-  process.env.LOG_ENABLED === 'false' ||
-  process.env.LOG_ENABLED === '0'
+  rawLogEnabledRepo === 'false' ||
+  rawLogEnabledRepo === '0' ||
+  rawLogEnabledRepo === 'off' ||
+  rawLogEnabledRepo === 'no'
 );
 
 class PositionRepository extends BaseRepository {
