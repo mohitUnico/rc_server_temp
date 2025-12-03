@@ -18,18 +18,18 @@ setInterval(() => {
 }, 60000);
 
 // POST /http/trading-credentials
-// Send trading credentials via email
+// Generic email sender used by Flutter: sends provided HTML template to given email
 router.post('/trading-credentials', async (req, res) => {
     try {
-        const { emailID, tradingID, tradingPassword } = req.body;
+        const { emailID, subject, html } = req.body;
 
         // Validate required fields
-        if (!emailID || !tradingID || !tradingPassword) {
+        if (!emailID || !subject || !html) {
             return res.status(400).json({
                 success: false,
                 error: 'Missing required fields',
-                message: 'emailID, tradingID, and tradingPassword are required',
-                required: ['emailID', 'tradingID', 'tradingPassword']
+                message: 'emailID, subject, and html are required',
+                required: ['emailID', 'subject', 'html']
             });
         }
 
@@ -43,25 +43,34 @@ router.post('/trading-credentials', async (req, res) => {
             });
         }
 
-        // Validate trading ID and password (basic validation)
-        if (tradingID.trim().length < 3) {
+        // Basic validation for subject and html
+        if (typeof subject !== 'string' || subject.trim().length === 0) {
             return res.status(400).json({
                 success: false,
-                error: 'Invalid trading ID',
-                message: 'Trading ID must be at least 3 characters long'
+                error: 'Invalid subject',
+                message: 'Subject must be a non-empty string'
             });
         }
 
-        if (tradingPassword.trim().length < 6) {
+        if (typeof html !== 'string' || html.trim().length === 0) {
             return res.status(400).json({
                 success: false,
-                error: 'Invalid trading password',
-                message: 'Trading password must be at least 6 characters long'
+                error: 'Invalid html',
+                message: 'HTML content must be a non-empty string'
+            });
+        }
+
+        // Optional: limit HTML size to avoid abuse
+        if (html.length > 100000) { // ~100 KB
+            return res.status(400).json({
+                success: false,
+                error: 'HTML too large',
+                message: 'HTML content size exceeds allowed limit'
             });
         }
 
         // Check for duplicate requests (prevents mobile app rapid-fire requests)
-        const requestKey = `${emailID}-${tradingID}`;
+        const requestKey = `${emailID}-${subject}`;
         const lastRequestTime = recentRequests.get(requestKey);
         const now = Date.now();
 
@@ -79,16 +88,15 @@ router.post('/trading-credentials', async (req, res) => {
         // Mark this request timestamp
         recentRequests.set(requestKey, now);
 
-        // Send email with trading credentials
-        const emailResult = await emailService.sendTradingCredentials(emailID, tradingID, tradingPassword);
+        // Send email with provided subject and HTML template
+        const emailResult = await emailService.sendCustomHtmlEmail(emailID, subject, html);
 
         if (emailResult.success) {
             res.status(200).json({
                 success: true,
-                message: 'Trading credentials sent successfully',
+                message: 'Email sent successfully',
                 data: {
                     emailID,
-                    tradingID,
                     messageId: emailResult.messageId,
                     sentAt: new Date().toISOString()
                 }
