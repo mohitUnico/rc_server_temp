@@ -260,6 +260,20 @@ class AccountMetricsService {
         `symbol=${symbol} unrealizedPnL=${unrealizedPnL} marginUsed=${marginUsed}`
       );
 
+      // Persist unrealized PnL to the positions table so the latest PnL
+      // is available on the position record itself while it is still open.
+      try {
+        if (position.id) {
+          await positionRepository.updatePosition(position.id, { pnl: unrealizedPnL });
+        }
+      } catch (persistError) {
+        logger.error(
+          `Error updating unrealized PnL for position ${position.id} in database:`,
+          persistError
+        );
+        // Do not throw: metrics calculation should continue even if this write fails
+      }
+
       return {
         unrealizedPnL,
         marginUsed
