@@ -77,7 +77,7 @@ class PositionRepository extends BaseRepository {
       const result = await this.create(data);
       return Position.fromDatabase(result);
     } catch (error) {
-      console.error('Error creating position:', error);
+      if (LOG_ENABLED) console.error('Error creating position:', error);
       throw error;
     }
   }
@@ -128,7 +128,7 @@ class PositionRepository extends BaseRepository {
 
       return { closeOrder, trade };
     } catch (error) {
-      console.error('Error creating close order and trade:', error);
+      if (LOG_ENABLED) console.error('Error creating close order and trade:', error);
       throw error;
     }
   }
@@ -144,7 +144,7 @@ class PositionRepository extends BaseRepository {
 
       // If not found by ID, try by UID (since accountId might actually be a UID)
       if (!account) {
-        console.log(`Account not found by ID ${accountId}, trying by UID...`);
+        if (LOG_ENABLED) console.log(`Account not found by ID ${accountId}, trying by UID...`);
         account = await this.tradingAccountRepository.findTradingAccountByUid(accountId);
       }
 
@@ -152,11 +152,13 @@ class PositionRepository extends BaseRepository {
         throw new Error(`Trading account not found by ID or UID: ${accountId}`);
       }
 
-      console.log(`Found trading account:`, {
-        id: account.id,
-        uid: account.accountUid,
-        leverage: account.leverage
-      });
+      if (LOG_ENABLED) {
+        console.log(`Found trading account:`, {
+          id: account.id,
+          uid: account.accountUid,
+          leverage: account.leverage
+        });
+      }
 
       // Get the instrument to get contract size
       const instrument = await this.instrumentRepository.findInstrumentById(instrumentId);
@@ -164,12 +166,14 @@ class PositionRepository extends BaseRepository {
         throw new Error(`Instrument not found: ${instrumentId}`);
       }
 
-      console.log(`Found instrument:`, {
-        id: instrument.id,
-        symbol: instrument.symbol,
-        category: instrument.category,
-        contractSize: instrument.contractSize
-      });
+      if (LOG_ENABLED) {
+        console.log(`Found instrument:`, {
+          id: instrument.id,
+          symbol: instrument.symbol,
+          category: instrument.category,
+          contractSize: instrument.contractSize
+        });
+      }
 
       // Get leverage from account (fallback to 100x if missing)
       const leverage = Number(account.leverage) > 0 ? Number(account.leverage) : 100;
@@ -198,17 +202,19 @@ class PositionRepository extends BaseRepository {
       // Calculate margin using the formula: Margin = (Lot Size × Contract Size × Price) / Leverage
       const margin = (lotSize * contractSize * entryPrice) / leverage;
 
-      console.log(`Calculated margin for position:`, {
-        lotSize,
-        contractSize,
-        entryPrice,
-        leverage,
-        calculatedMargin: margin
-      });
+      if (LOG_ENABLED) {
+        console.log(`Calculated margin for position:`, {
+          lotSize,
+          contractSize,
+          entryPrice,
+          leverage,
+          calculatedMargin: margin
+        });
+      }
 
       return margin;
     } catch (error) {
-      console.error('Error calculating required margin:', error);
+      if (LOG_ENABLED) console.error('Error calculating required margin:', error);
       throw error; // Don't use fallback, let the error propagate
     }
   }
@@ -226,7 +232,7 @@ class PositionRepository extends BaseRepository {
       const positions = result.map(position => Position.fromDatabase(position));
       return await this.enrichPositionsWithInstrumentDetails(positions);
     } catch (error) {
-      console.error('Error finding positions by account ID:', error);
+      if (LOG_ENABLED) console.error('Error finding positions by account ID:', error);
       throw error;
     }
   }
@@ -247,7 +253,7 @@ class PositionRepository extends BaseRepository {
       const positions = result.map(position => Position.fromDatabase(position));
       return await this.enrichPositionsWithInstrumentDetails(positions);
     } catch (error) {
-      console.error('Error finding open positions by account ID:', error);
+      if (LOG_ENABLED) console.error('Error finding open positions by account ID:', error);
       throw error;
     }
   }
@@ -268,7 +274,7 @@ class PositionRepository extends BaseRepository {
       const positions = result.map(position => Position.fromDatabase(position));
       return await this.enrichPositionsWithInstrumentDetails(positions);
     } catch (error) {
-      console.error('Error finding closed positions by account ID:', error);
+      if (LOG_ENABLED) console.error('Error finding closed positions by account ID:', error);
       throw error;
     }
   }
@@ -282,7 +288,7 @@ class PositionRepository extends BaseRepository {
       const result = await this.updateById(id, updates);
       return Position.fromDatabase(result);
     } catch (error) {
-      console.error('Error updating position:', error);
+      if (LOG_ENABLED) console.error('Error updating position:', error);
       throw error;
     }
   }
@@ -346,7 +352,7 @@ class PositionRepository extends BaseRepository {
           console.log(`Created close order ${closeOrder.id} and trade ${trade.id} for position ${positionId}`);
         }
       } catch (orderTradeError) {
-        console.error('Error creating close order and trade:', orderTradeError);
+        if (LOG_ENABLED) console.error('Error creating close order and trade:', orderTradeError);
         // Don't throw here - the position is already closed, we don't want to rollback
         // Just log the error for debugging
       }
@@ -360,14 +366,14 @@ class PositionRepository extends BaseRepository {
         });
         if (LOG_ENABLED) console.log(`Successfully updated balance for account ${position.accountId}`);
       } catch (balanceError) {
-        console.error('Error updating balance:', balanceError);
+        if (LOG_ENABLED) console.error('Error updating balance:', balanceError);
         // Don't throw here - the position is already closed, we don't want to rollback
         // Just log the error for debugging
       }
 
       return closedPosition;
     } catch (error) {
-      console.error('Error closing position:', error);
+      if (LOG_ENABLED) console.error('Error closing position:', error);
       throw error;
     }
   }
@@ -421,7 +427,7 @@ class PositionRepository extends BaseRepository {
           closedPositions.push(closedPosition);
           if (LOG_ENABLED) console.log(`Successfully closed position ${positionId} with PnL: ${pnl}`);
         } catch (error) {
-          console.error(`Error closing position ${positionId}:`, error);
+          if (LOG_ENABLED) console.error(`Error closing position ${positionId}:`, error);
           // Continue with other positions even if one fails
         }
       }
@@ -437,7 +443,7 @@ class PositionRepository extends BaseRepository {
             console.log(`Successfully updated balance for account ${accountId} with total PnL: ${totalPnL}`);
           }
         } catch (balanceError) {
-          console.error(`Error updating balance for account ${accountId}:`, balanceError);
+          if (LOG_ENABLED) console.error(`Error updating balance for account ${accountId}:`, balanceError);
           // Don't throw here - positions are already closed
         }
       }
@@ -447,7 +453,7 @@ class PositionRepository extends BaseRepository {
       }
       return closedPositions;
     } catch (error) {
-      console.error('Error closing all open positions:', error);
+      if (LOG_ENABLED) console.error('Error closing all open positions:', error);
       throw error;
     }
   }
@@ -536,10 +542,12 @@ class PositionRepository extends BaseRepository {
           if (LOG_ENABLED) console.log(`  FX rate ${quoteCurrency}->${accountCurrency}: ${R}`);
           pnlInAccount = pnlInQuote * R;
         } catch (fxError) {
-          console.error(
-            `  Warning: Failed to get FX rate from ${quoteCurrency} to ${accountCurrency}:`,
-            fxError
-          );
+          if (LOG_ENABLED) {
+            console.error(
+              `  Warning: Failed to get FX rate from ${quoteCurrency} to ${accountCurrency}:`,
+              fxError
+            );
+          }
           // Fall back to treating quote == account currency
           pnlInAccount = pnlInQuote;
         }
@@ -553,7 +561,7 @@ class PositionRepository extends BaseRepository {
 
       return pnlInAccount;
     } catch (error) {
-      console.error('Error calculating PnL:', error);
+      if (LOG_ENABLED) console.error('Error calculating PnL:', error);
       throw error;
     }
   }
@@ -569,7 +577,7 @@ class PositionRepository extends BaseRepository {
       const position = Position.fromDatabase(result);
       return await this.enrichPositionWithInstrumentDetails(position);
     } catch (error) {
-      console.error('Error finding position by ID:', error);
+      if (LOG_ENABLED) console.error('Error finding position by ID:', error);
       throw error;
     }
   }
@@ -581,7 +589,7 @@ class PositionRepository extends BaseRepository {
     try {
       return await this.deleteById(id);
     } catch (error) {
-      console.error('Error deleting position:', error);
+      if (LOG_ENABLED) console.error('Error deleting position:', error);
       throw error;
     }
   }
@@ -641,12 +649,12 @@ class PositionRepository extends BaseRepository {
       const updatedPosition = await this.updateById(originalPosition.id, updates);
 
       // 3. Create order and trade entries for the partial close
-      console.log(`Creating close order and trade for partial close of position ${originalPosition.id}`);
+      if (LOG_ENABLED) console.log(`Creating close order and trade for partial close of position ${originalPosition.id}`);
       try {
         const { closeOrder, trade } = await this.createCloseOrderAndTrade(originalPosition, closeLotSize, exitPrice);
-        console.log(`Created close order ${closeOrder.id} and trade ${trade.id} for partial close of position ${originalPosition.id}`);
+        if (LOG_ENABLED) console.log(`Created close order ${closeOrder.id} and trade ${trade.id} for partial close of position ${originalPosition.id}`);
       } catch (orderTradeError) {
-        console.error('Error creating close order and trade for partial close:', orderTradeError);
+        if (LOG_ENABLED) console.error('Error creating close order and trade for partial close:', orderTradeError);
         // Don't throw here - the position is already updated, we don't want to rollback
         // Just log the error for debugging
       }
@@ -657,9 +665,9 @@ class PositionRepository extends BaseRepository {
           accountUid: originalPosition.accountId,
           amount: pnl
         });
-        console.log(`Successfully updated balance for account ${originalPosition.accountId} with PnL ${pnl}`);
+        if (LOG_ENABLED) console.log(`Successfully updated balance for account ${originalPosition.accountId} with PnL ${pnl}`);
       } catch (balanceError) {
-        console.error('Error updating balance:', balanceError);
+        if (LOG_ENABLED) console.error('Error updating balance:', balanceError);
         // Don't throw here - the position is already updated, we don't want to rollback
         // Just log the error for debugging
       }
@@ -669,7 +677,7 @@ class PositionRepository extends BaseRepository {
         openPosition: Position.fromDatabase(updatedPosition)
       };
     } catch (error) {
-      console.error('Error partially closing position:', error);
+      if (LOG_ENABLED) console.error('Error partially closing position:', error);
       throw error;
     }
   }
@@ -687,7 +695,7 @@ class PositionRepository extends BaseRepository {
       const positions = result.map(position => Position.fromDatabase(position));
       return await this.enrichPositionsWithInstrumentDetails(positions);
     } catch (error) {
-      console.error('Error finding positions by status:', error);
+      if (LOG_ENABLED) console.error('Error finding positions by status:', error);
       throw error;
     }
   }
@@ -719,7 +727,7 @@ class PositionRepository extends BaseRepository {
       const positions = result.map(position => Position.fromDatabase(position));
       return await this.enrichPositionsWithInstrumentDetails(positions);
     } catch (error) {
-      console.error('Error finding positions by type:', error);
+      if (LOG_ENABLED) console.error('Error finding positions by type:', error);
       throw error;
     }
   }
@@ -769,7 +777,7 @@ class PositionRepository extends BaseRepository {
         }
       };
     } catch (error) {
-      console.error('Error getting positions with pagination:', error);
+      if (LOG_ENABLED) console.error('Error getting positions with pagination:', error);
       throw error;
     }
   }
@@ -803,7 +811,7 @@ class PositionRepository extends BaseRepository {
 
       return stats;
     } catch (error) {
-      console.error('Error getting position statistics:', error);
+      if (LOG_ENABLED) console.error('Error getting position statistics:', error);
       throw error;
     }
   }
@@ -817,7 +825,7 @@ class PositionRepository extends BaseRepository {
       const positions = result.map(position => Position.fromDatabase(position));
       return await this.enrichPositionsWithInstrumentDetails(positions);
     } catch (error) {
-      console.error('Error finding all positions with instrument details:', error);
+      if (LOG_ENABLED) console.error('Error finding all positions with instrument details:', error);
       throw error;
     }
   }
@@ -850,7 +858,7 @@ class PositionRepository extends BaseRepository {
 
       return position;
     } catch (error) {
-      console.error('Error enriching position with instrument details:', error);
+      if (LOG_ENABLED) console.error('Error enriching position with instrument details:', error);
       return position; // Return original position if enrichment fails
     }
   }
@@ -895,7 +903,7 @@ class PositionRepository extends BaseRepository {
 
       return positions;
     } catch (error) {
-      console.error('Error enriching positions with instrument details:', error);
+      if (LOG_ENABLED) console.error('Error enriching positions with instrument details:', error);
       return positions; // Return original positions if enrichment fails
     }
   }

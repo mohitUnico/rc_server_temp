@@ -4,6 +4,15 @@ import { WebSocketConfig } from '../config/websocket.js';
 import { getClientsForSymbol, removeClientFromSymbol } from '../utils/subscriptionManager.js';
 import priceCacheService from '../services/priceCacheService.js';
 
+// Global logging flag
+const rawLogEnabled = (process.env.LOG_ENABLED || '').toString().trim().toLowerCase();
+const LOG_ENABLED = !(
+    rawLogEnabled === 'false' ||
+    rawLogEnabled === '0' ||
+    rawLogEnabled === 'off' ||
+    rawLogEnabled === 'no'
+);
+
 let cryptoManager = null;
 
 export async function connectToCrypto() {
@@ -34,14 +43,14 @@ export async function connectToCrypto() {
                             try {
                                 client.send(JSON.stringify(message));
                             } catch (error) {
-                                console.error(`Error sending message to client for ${symbol}:`, error);
+                                if (LOG_ENABLED) console.error(`Error sending message to client for ${symbol}:`, error);
                             }
                         }
                     }
                 }
 
             } catch (error) {
-                console.error(`Error processing ${assetType} message for ${symbol}:`, error);
+                if (LOG_ENABLED) console.error(`Error processing ${assetType} message for ${symbol}:`, error);
             }
         });
     }

@@ -5,6 +5,15 @@ import { getClientsForSymbol, removeClientFromSymbol, getAllSubscriptions } from
 import priceCacheService from '../services/priceCacheService.js';
 import forexSubscriptionService from '../services/forexSubscriptionService.js';
 
+// Global logging flag
+const rawLogEnabled = (process.env.LOG_ENABLED || '').toString().trim().toLowerCase();
+const LOG_ENABLED = !(
+    rawLogEnabled === 'false' ||
+    rawLogEnabled === '0' ||
+    rawLogEnabled === 'off' ||
+    rawLogEnabled === 'no'
+);
+
 // Threshold after which we consider that no new data is coming from iTick
 const INACTIVITY_THRESHOLD_MS = 5000; // 5 seconds
 // How often we will push cached data to Flutter clients while upstream is idle
@@ -55,7 +64,7 @@ export async function connectToForex() {
                             try {
                                 client.send(JSON.stringify(message));
                             } catch (error) {
-                                console.error(`Error sending message to client for ${symbol}:`, error);
+                                if (LOG_ENABLED) console.error(`Error sending message to client for ${symbol}:`, error);
                             }
                         }
                     }
@@ -72,7 +81,7 @@ export async function connectToForex() {
                 }
 
             } catch (error) {
-                console.error(`Error processing ${assetType} message for ${symbol}:`, error);
+                if (LOG_ENABLED) console.error(`Error processing ${assetType} message for ${symbol}:`, error);
             }
         });
 
@@ -83,7 +92,7 @@ export async function connectToForex() {
         try {
             await forexSubscriptionService.subscribeToAllSymbols(forexManager);
         } catch (error) {
-            console.error('Failed to subscribe to forex symbols:', error);
+            if (LOG_ENABLED) console.error('Failed to subscribe to forex symbols:', error);
         }
 
         // Start cache-based broadcast loop so Flutter clients keep receiving data
@@ -147,7 +156,7 @@ function broadcastCachedPricesWhenIdle() {
                 try {
                     client.send(JSON.stringify(message));
                 } catch (error) {
-                    console.error(`Error sending cached message to client for ${symbol}:`, error);
+                    if (LOG_ENABLED) console.error(`Error sending cached message to client for ${symbol}:`, error);
                 }
             }
         }
