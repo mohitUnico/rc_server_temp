@@ -13,7 +13,8 @@ class PositionCheckService {
   constructor() {
     this.isRunning = false;
     this.checkInterval = null;
-    this.checkIntervalMs = 1000; // 10 seconds instead of 100ms for testing
+    // Check SL/TP every 100ms for low-latency execution
+    this.checkIntervalMs = 100;
   }
 
   /**
@@ -43,7 +44,7 @@ class PositionCheckService {
 
     logger.info('Stopping position check service');
     this.isRunning = false;
-    
+
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
@@ -57,7 +58,7 @@ class PositionCheckService {
     try {
       // Get all open positions
       const openPositions = await positionRepository.findOpenPositions();
-      
+
       if (openPositions.length === 0) {
         return; // No open positions to check
       }
@@ -86,7 +87,7 @@ class PositionCheckService {
 
       // Get current price for the instrument from WebSocket cache
       const currentPrice = await priceCacheService.getCurrentPriceByInstrumentId(position.instrumentId);
-      
+
       // if (!currentPrice) {
       //   logger.warn(`Could not get current price for instrument ${position.instrumentId} from WebSocket cache`);
       //   return;
@@ -145,7 +146,7 @@ class PositionCheckService {
   async checkPositionsForAccount(accountId) {
     try {
       const openPositions = await positionRepository.findOpenPositionsByAccountId(accountId);
-      
+
       if (openPositions.length === 0) {
         return;
       }
