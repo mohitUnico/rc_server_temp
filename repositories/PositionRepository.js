@@ -308,6 +308,16 @@ class PositionRepository extends BaseRepository {
         throw new Error('Position not found');
       }
 
+      // If position is already closed, avoid double-closing and double balance updates.
+      if (position.status === PositionStatus.CLOSED) {
+        if (LOG_ENABLED) {
+          console.log(
+            `Position ${positionId} is already closed, skipping closePosition logic to prevent duplicate balance updates.`
+          );
+        }
+        return position;
+      }
+
       if (LOG_ENABLED) {
         console.log(`Found position for account: ${position.accountId}`);
         console.log('Position details:');

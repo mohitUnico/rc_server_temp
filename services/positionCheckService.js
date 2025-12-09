@@ -12,9 +12,11 @@ const positionRepository = new PositionRepository();
 class PositionCheckService {
   constructor() {
     this.isRunning = false;
+    this.isChecking = false;
     this.checkInterval = null;
     // Check SL/TP every 100ms for low-latency execution
     this.checkIntervalMs = 100;
+    this.lastCheck = null;
   }
 
   /**
@@ -28,8 +30,24 @@ class PositionCheckService {
 
     logger.info('Starting position check service');
     this.isRunning = true;
-    this.checkInterval = setInterval(() => {
-      this.checkPositions();
+    this.checkInterval = setInterval(async () => {
+      // Prevent overlapping async executions which can lead to the same
+      // position being closed more than once and PnL applied twice.
+      if (this.isChecking) {
+        logger.debug('Position check is already in progress, skipping this interval tick');
+        return;
+      }
+
+      this.isChecking = true;
+      this.lastCheck = new Date().toISOString();
+
+      try {
+        await this.checkPositions();
+      } catch (error) {
+        logger.error('Unhandled error during position check interval:', error);
+      } finally {
+        this.isChecking = false;
+      }
     }, this.checkIntervalMs);
   }
 
@@ -44,6 +62,7 @@ class PositionCheckService {
 
     logger.info('Stopping position check service');
     this.isRunning = false;
+    this.isChecking = false;
 
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
